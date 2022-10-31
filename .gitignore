@@ -1,0 +1,16 @@
+.DS_Store
+
+data/**
+__pycache__/**
+**/__pycache__/**
+
+
+analysis/act_atmos.egg-info/**
+analysis/build/**
+analysis/dist/**
+analysis/gucdlppiM1.b1/**
+analysis/gucdlrhiM1.b1/**
+analysis/guckazrcfrgeM1.a1/**
+analysis/gucldM1.b1/**
+kp_radar_windspeed.pickle
+kps_Radar_FMCW_Moment
