@@ -3,6 +3,10 @@ import datetime
 import xarray as xr
 import os
 import urllib
+import geopy
+import geopy.distance
+import shapely.geometry
+import py3dep
 
 def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc'):
     """Download a netcdf file from the ftp url provided by the Earth Observing Laboratory at NCAR.
@@ -184,6 +188,8 @@ def measurement_from_variable_name(name):
         return 'soil temperature'
     elif 'T_' in name:
         return 'temperature'
+    elif any([prefix in name for prefix in ['tc_1m', 'tc_3m', 'tc_10m']]):
+        return 'potential temperature'
     elif name == 'Gsoil_d':
         return 'ground heat flux'
     elif name == 'Qsoil_d':   
@@ -192,6 +198,12 @@ def measurement_from_variable_name(name):
         return 'shortwave radiation incoming'
     elif name == 'Rsw_out_9m_d':
         return 'shortwave radiation outgoing'
+    # these following Rlw variables do not actually come in the NCAR provided datasets, but are consistent with their naming schema
+    elif name == 'Rlw_in_9m_d':
+        return 'shortwave radiation incoming'
+    elif name == 'Rlw_out_9m_d':
+        return 'shortwave radiation outgoing'
+
         
 def time_from_day_and_hhmm(
     day,
@@ -216,3 +228,76 @@ def time_from_day_and_hhmm(
         + datetime.timedelta(days = day - 1) \
         + datetime.timedelta(hours = hours) \
         + datetime.timedelta(minutes = minutes)
+
+# if already downloaded
+
+def merge_datasets_with_different_variables(ds_list, dim):
+    """ This gets slow with lots of datasets
+
+    Args:
+        ds_list (_type_): _description_
+        dim (_type_): _description_
+    """
+    def _merge_datasets_with_different_variables(ds1, ds2, dim):
+        vars1 = set(ds1.data_vars)
+        vars2 = set(ds2.data_vars)
+        in1_notin2 = vars1.difference(vars2)
+        in2_notin1 = vars2.difference(vars1)
+        # add vars with NaN values to ds1
+        for v in in2_notin1:
+            ds1[v] = xr.DataArray(coords=ds1.coords, dims=ds1.dims)
+        # add vars with NaN values to ds2
+        for v in in1_notin2:
+            ds2[v] = xr.DataArray(coords=ds2.coords, dims=ds2.dims)
+        return xr.concat([ds1, ds2], dim=dim)
+
+    new_ds = ds_list.pop(0)
+    while ds_list:
+        new_ds = _merge_datasets_with_different_variables(
+            new_ds,
+            ds_list.pop(0),
+            dim=dim
+        )
+    return new_ds
+
+
+def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
+    """_summary_
+
+    Args:
+        lon (_type_): _description_
+        lat (_type_): _description_
+        bearing (_type_): _description_
+        radius (_type_): _description_
+        spacing (int, optional): _description_. Defaults to 10.
+    """
+    radar_location = geopy.Point(lat, lon)
+    radar_elevation = py3dep.elevation_bycoords(
+        [(radar_location.longitude, radar_location.latitude)]
+    )[0]
+
+    positive_distance = geopy.distance.distance(
+        kilometers=radius
+    ).destination(
+        point=radar_location, 
+        bearing=bearing
+    )
+    negitive_distance = geopy.distance.distance(
+        kilometers=radius
+    ).destination(
+        point=radar_location, 
+        bearing=-bearing
+    )
+    line = shapely.geometry.LineString([
+        shapely.geometry.Point(radar_location.longitude, radar_location.latitude),
+        shapely.geometry.Point(radar_location.longitude, radar_location.latitude),
+        shapely.geometry.Point(negitive_distance.longitude, negitive_distance.latitude)
+    ])
+
+    elevation_profile = py3dep.elevation_profile(line, spacing=spacing, crs='EPSG:4326')
+    elevation_profile.values = elevation_profile.values - radar_elevation
+    elevation_profile_df = elevation_profile.to_dataframe().reset_index()
+    elevation_profile_df['distance'] = elevation_profile_df['distance'] - radius
+    elevation_profile_df['zero'] = 0
+
+    return elevation_profile_df
