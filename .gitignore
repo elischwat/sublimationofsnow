@@ -13,6 +13,6 @@ analysis/gucdlrhiM1.b1/**
 analysis/guckazrcfrgeM1.a1/**
 analysis/gucldM1.b1/**
 kp_radar_windspeed.pickle
-kps_Radar_FMCW_Moment
-
+analysis/kps_Radar_FMCW_Moment/**
+analysis/xprecip/**
 **sosnoqc**
