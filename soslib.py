@@ -7,6 +7,10 @@ import geopy
 import geopy.distance
 import shapely.geometry
 import py3dep
+import numpy as np
+import rasterio
+import geopandas as gpd
+
 
 def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc'):
     """Download a netcdf file from the ftp url provided by the Earth Observing Laboratory at NCAR.
@@ -301,3 +305,51 @@ def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
     elevation_profile_df['zero'] = 0
 
     return elevation_profile_df
+
+def get_radar_scan_ground_profile_from_raster(dem_file, lon, lat, bearing, radius, n_points):
+    """_summary_
+
+    Args:
+        lon (_type_): _description_
+        lat (_type_): _description_
+        bearing (_type_): _description_
+        radius (_type_): _description_
+        spacing (int, optional): _description_. Defaults to 10.
+    """
+    radar_location = geopy.Point(lat, lon)
+    print('getting radar elevation')
+    radar_elevation = py3dep.elevation_bycoords(
+        [(radar_location.longitude, radar_location.latitude)]
+    )[0]
+    print('got radar elevation')
+    positive_distance = geopy.distance.distance(
+        kilometers=radius
+    ).destination(
+        point=radar_location, 
+        bearing=bearing
+    )
+    negitive_distance = geopy.distance.distance(
+        kilometers=radius
+    ).destination(
+        point=radar_location, 
+        bearing=bearing-180
+    )
+    line = shapely.geometry.LineString([
+        shapely.geometry.Point(positive_distance.longitude, positive_distance.latitude),
+        shapely.geometry.Point(radar_location.longitude, radar_location.latitude),
+        shapely.geometry.Point(negitive_distance.longitude, negitive_distance.latitude)
+    ])
+
+    line = gpd.GeoDataFrame(geometry=pd.Series([line])).set_crs('EPSG:4326').to_crs('EPSG:32613').geometry.iloc[0]
+    distances = np.linspace(0, line.length, n_points)
+    points = [line.interpolate(distance) for distance in distances]
+    line = gpd.GeoDataFrame(geometry=[shapely.geometry.LineString(points)]).set_crs('EPSG:32613').to_crs('EPSG:4326').geometry.iloc[0]
+    points = list(line.coords)
+    dem = rasterio.open(dem_file)
+    elevation_profile = rasterio.sample.sample_gen(dem, points)
+    elevation_profile = [f[0]-radar_elevation for f in elevation_profile]
+
+    return pd.DataFrame({
+        'elevation': elevation_profile,
+        'distance': pd.Series(distances) - radius
+    })
