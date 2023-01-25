@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+# %%
 import numpy as np
 import argparse
 import pandas as pd
@@ -7,16 +9,18 @@ import matplotlib.pyplot as plt
 import act
 import os
 import sys
-sys.path.append('../')
+sys.path.append('/home/elilouis/sublimationofsnow')
 import sosutils
 from tempfile import TemporaryDirectory
 
+# %%
 USERNAME = os.getenv("ARM_USERNAME")
 TOKEN = os.getenv("ARM_TOKEN")
 SAIL_DATA_STREAM = 'gucdlrhiM1.b1'
 SNR_THRESHOLD = 0.008
 
 
+# %%
 def create_dl_plots(output_path, date):
     startdate = date
     enddate = date
@@ -100,6 +104,7 @@ def create_dl_plots(output_path, date):
     plt.savefig(output_file)
 
 
+# %%
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -113,7 +118,7 @@ def main():
         "-d",
         "--date",
         type=str,      
-        default=(datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
+        default=(datetime.datetime.today() - datetime.timedelta(days=2)).strftime("%Y-%m-%d"),
         help="Date you want data from, in format '%Y-%m-%d'."
     )
     args = parser.parse_args()
@@ -123,5 +128,6 @@ def main():
     )
 
 
+# %%
 if __name__ == "__main__":
     main()
