@@ -26,7 +26,7 @@ token='761cf7339f9adaec'
 # os.makedirs(output_path, exist_ok=True)
 os.makedirs(modified_path, exist_ok=True)
 
-# act.discovery.download_data(username, token, ds_dl_fpt, startdate, enddate, output=output_path)
+act.discovery.download_data(username, token, ds_dl_fpt, startdate, enddate, output=output_path)
 
 files = glob.glob(os.path.join(output_path, '*cdf'))    
 
