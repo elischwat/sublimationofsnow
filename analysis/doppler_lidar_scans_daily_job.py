@@ -8,7 +8,7 @@ import act
 import os
 import sys
 sys.path.append('../')
-import utils
+import sosutils
 from tempfile import TemporaryDirectory
 
 USERNAME = os.getenv("ARM_USERNAME")
@@ -44,14 +44,14 @@ def create_dl_plots(output_path, date):
     src_rhi['time_beginning_of_hour'] = src_rhi['time'].apply(lambda dt: dt.replace(minute=0, second=0, microsecond=0))
 
     # Get ground profile
-    upvalley_elev_profile_df = utils.get_radar_scan_ground_profile(
+    upvalley_elev_profile_df = sosutils.get_radar_scan_ground_profile(
         lon =     dl_rhi['lon'].values[0],
         lat =     dl_rhi['lat'].values[0],
         bearing =     330,
         radius =     3, #km
         spacing = 10
     )
-    downvalley_elev_profile_df = utils.get_radar_scan_ground_profile(
+    downvalley_elev_profile_df = sosutils.get_radar_scan_ground_profile(
         lon =     dl_rhi['lon'].values[0],
         lat =     dl_rhi['lat'].values[0],
         bearing =     130,
