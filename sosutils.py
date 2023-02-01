@@ -12,8 +12,47 @@ import numpy as np
 import rasterio
 import geopandas as gpd
 
+from astral import LocationInfo
+from astral.sun import sun
+
+ROTATION_SUPPORTED_MEASUREMENTS = [
+     'u',     'v',     
+     'u_w_',     'v_w_', 
+     'u_tc_',     'v_tc_',    
+    'u_h2o_',     'v_h2o_',    
+    ]
+
+
+def download_sos_highrate_data_hour(date = '20221031', hour = '00', local_download_dir = 'hr_noqc_geo'):
+    """Download a netcdf file from the ftp url provided by the Earth Observing Laboratory at NCAR.
+    Data is the high-rate, 20hz data.
+
+    Args:
+        date (str, optional): String date. Defaults to '20221101'.
+        hour (str, optional): String hour, two digits. Defaults to '00'.
+        local_download_dir (str, optional): _description_. Defaults to 'hr_noqc_geo'.
+    """
+    base_url = 'ftp.eol.ucar.edu'
+    path = 'pub/archive/isfs/projects/SOS/netcdf/hr_noqc_geo'
+    file_example = f'isfs_geo_hr_{date}_{hour}.nc'
+
+    os.makedirs(local_download_dir, exist_ok=True)
+
+    full_file_path = os.path.join('ftp://', base_url, path, file_example)
+    download_file_path = os.path.join(local_download_dir, file_example)
+
+    urllib.request.urlretrieve(
+        full_file_path,
+        download_file_path   
+    )
+    
+    return download_file_path
+
+
+
 def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc'):
     """Download a netcdf file from the ftp url provided by the Earth Observing Laboratory at NCAR.
+    Data is the daily data reynolds averaged to 5 minutes.
 
     Args:
         date (str, optional): String version of a date. Defaults to '20221101'.
@@ -166,7 +205,9 @@ def measurement_from_variable_name(name):
     Returns:
         _type_: _description_
     """
-    if any([prefix in name for prefix in ['dir_1m_','dir_2m_','dir_3m_','dir_5m_','dir_10m_','dir_15m_','dir_20m_']]):
+    if any([prefix in name for prefix in ['P_10m_', 'P_20m_']]):
+        return 'pressure'
+    elif any([prefix in name for prefix in ['dir_1m_','dir_2m_','dir_3m_','dir_5m_','dir_10m_','dir_15m_','dir_20m_']]):
         return 'wind direction'
     elif any([prefix in name for prefix in ['spd_1m_', 'spd_2m_', 'spd_3m_', 'spd_5m_', 'spd_10m_', 'spd_15m_', 'spd_20m_']]):
         return 'wind speed'
@@ -174,26 +215,37 @@ def measurement_from_variable_name(name):
         return 'u'
     elif any([prefix in name for prefix in ['v_1m_','v_2m_','v_3m_','v_5m_','v_10m_','v_15m_','v_20m_']]):
         return 'v'
+    elif any([prefix in name for prefix in ['w_1m_','w_2m_','w_3m_','w_5m_','w_10m_','w_15m_','w_20m_']]):
+        return 'w'
     elif any([prefix in name for prefix in ['u_w__1m_','u_w__2m_','u_w__3m_','u_w__5m_','u_w__10m_','u_w__15m_','u_w__20m_']]):
         return 'u_w_'
     elif any([prefix in name for prefix in ['v_w__1m_','v_w__2m_','v_w__3m_','v_w__5m_','v_w__10m_','v_w__15m_','v_w__20m_']]):
         return 'v_w_'
+    elif any([prefix in name for prefix in ['u_v__1m_','u_v__2m_','u_v__3m_','u_v__5m_','u_v__10m_','u_v__15m_','u_v__20m_']]):
+        return 'u_v_'
     elif any([prefix in name for prefix in ['u_tc__1m_','u_tc__2m_','u_tc__3m_','u_tc__5m_','u_tc__10m_','u_tc__15m_','u_tc__20m_']]):
         return 'u_tc_'
     elif any([prefix in name for prefix in ['v_tc__1m_','v_tc__2m_','v_tc__3m_','v_tc__5m_','v_tc__10m_','v_tc__15m_','v_tc__20m_']]):
         return 'v_tc_'
     elif any([prefix in name for prefix in ['w_tc__1m_','w_tc__2m_','w_tc__3m_','w_tc__5m_','w_tc__10m_','w_tc__15m_','w_tc__20m_']]):
         return 'w_tc_'
+    elif any([prefix in name for prefix in ['u_h2o__1m_','u_h2o__2m_','u_h2o__3m_','u_h2o__5m_','u_h2o__10m_','u_h2o__15m_','u_h2o__20m_']]):
+        return 'u_h2o_'
+    elif any([prefix in name for prefix in ['v_h2o__1m_','v_h2o__2m_','v_h2o__3m_','v_h2o__5m_','v_h2o__10m_','v_h2o__15m_','v_h2o__20m_']]):
+        return 'v_h2o_'
     elif any([prefix in name for prefix in ['w_h2o__1m_','w_h2o__2m_','w_h2o__3m_','w_h2o__5m_','w_h2o__10m_','w_h2o__15m_','w_h2o__20m_']]):
         return 'w_h2o_'
     elif any([prefix in name for prefix in ['T_1m_', 'T_2m_', 'T_3m_', 'T_4m_', 'T_5m_', 'T_6m_', 'T_7m_', 'T_8m_', 'T_9m_', 'T_10m_', 'T_11m_', 'T_12m_', 'T_13m_', 'T_14m_', 'T_15m_', 'T_16m_', 'T_17m_', 'T_18m_', 'T_19m_', 'T_20m_']]):
-        return 'T'
+        return 'temperature'
+    elif any([prefix in name for prefix in ['RH_1m_', 'RH_2m_', 'RH_3m_', 'RH_4m_', 'RH_5m_', 'RH_6m_', 'RH_7m_', 'RH_8m_', 'RH_9m_', 'RH_10m_', 'RH_11m_', 'RH_12m_', 'RH_13m_', 'RH_14m_', 'RH_15m_', 'RH_16m_', 'RH_17m_', 'RH_18m_', 'RH_19m_', 'RH_20m_']]):
+        return 'RH'
+    elif any([prefix in name for prefix in ['tc_1m', 'tc_2m', 'tc_3m', 'tc_5m', 'tc_10m', 'tc_15m', 'tc_20m']]):
+        return 'virtual temperature'
+    # NOTE: Tpot IS NOT A SOSNOQC VARIABLE NAME
+    elif any([prefix in name for prefix in ['Tpot_1m_', 'Tpot_2m_', 'Tpot_3m_', 'Tpot_4m_', 'Tpot_5m_', 'Tpot_6m_', 'Tpot_7m_', 'Tpot_8m_', 'Tpot_9m_', 'Tpot_10m_', 'Tpot_11m_', 'Tpot_12m_', 'Tpot_13m_', 'Tpot_14m_', 'Tpot_15m_', 'Tpot_16m_', 'Tpot_17m_', 'Tpot_18m_', 'Tpot_19m_', 'Tpot_20m_']]):
+        return 'potential temperature'
     elif any([prefix in name for prefix in ['Tsoil_3_1cm_d', 'Tsoil_8_1cm_d', 'Tsoil_18_1cm_d', 'Tsoil_28_1cm_d', 'Tsoil_4_4cm_d', 'Tsoil_9_4cm_d', 'Tsoil_19_4cm_d', 'Tsoil_29_4cm_d', 'Tsoil_0_6cm_d',  'Tsoil_10_6cm_d', 'Tsoil_20_6cm_d', 'Tsoil_30_6cm_d', 'Tsoil_1_9cm_d', 'Tsoil_11_9cm_d', 'Tsoil_21_9cm_d', 'Tsoil_31_9cm_d']]):
         return 'soil temperature'
-    elif 'T_' in name:
-        return 'temperature'
-    elif any([prefix in name for prefix in ['tc_1m', 'tc_2m', 'tc_3m', 'tc_5m', 'tc_10m', 'tc_15m', 'tc_20m']]):
-        return 'potential temperature'
     elif name == 'Gsoil_d':
         return 'ground heat flux'
     elif name == 'Qsoil_d':   
@@ -264,6 +316,43 @@ def merge_datasets_with_different_variables(ds_list, dim):
         )
     return new_ds
 
+def modify_df_timezone(df, source_tz, target_tz):
+    df = df.copy()
+    df['time'] = df['time'].dt.tz_localize(source_tz).dt.tz_convert(target_tz).dt.tz_localize(None)
+    return df
+
+def modify_xarray_timezone(ds, source_tz, target_tz):
+    time_utc = ds['time'].to_index().tz_localize(source_tz)
+    tz_corrected = time_utc.tz_convert(target_tz).tz_localize(None)
+    local_da=xr.DataArray.from_series(tz_corrected)
+    ds.coords.update({'local_time':tz_corrected})
+    return ds
+
+def get_linestring(lon, lat, bearing, radius):
+    radar_location = geopy.Point(lat, lon)
+    radar_elevation = py3dep.elevation_bycoords(
+        [(radar_location.longitude, radar_location.latitude)]
+    )[0]
+
+    positive_distance = geopy.distance.distance(
+        kilometers=radius
+    ).destination(
+        point=radar_location, 
+        bearing=bearing
+    )
+    negitive_distance = geopy.distance.distance(
+        kilometers=radius
+    ).destination(
+        point=radar_location, 
+        bearing=bearing-180
+    )
+    return shapely.geometry.LineString([
+        shapely.geometry.Point(negitive_distance.longitude, negitive_distance.latitude),
+        shapely.geometry.Point(radar_location.longitude, radar_location.latitude),
+        shapely.geometry.Point(positive_distance.longitude, positive_distance.latitude),
+        
+    ])
+
 
 def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
     """_summary_
@@ -279,25 +368,7 @@ def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
     radar_elevation = py3dep.elevation_bycoords(
         [(radar_location.longitude, radar_location.latitude)]
     )[0]
-
-    positive_distance = geopy.distance.distance(
-        kilometers=radius
-    ).destination(
-        point=radar_location, 
-        bearing=bearing
-    )
-    negitive_distance = geopy.distance.distance(
-        kilometers=radius
-    ).destination(
-        point=radar_location, 
-        bearing=bearing-180
-    )
-    line = shapely.geometry.LineString([
-        shapely.geometry.Point(negitive_distance.longitude, negitive_distance.latitude),
-        shapely.geometry.Point(radar_location.longitude, radar_location.latitude),
-        shapely.geometry.Point(positive_distance.longitude, positive_distance.latitude),
-        
-    ])
+    line = get_linestring(lon, lat, bearing, radius)
 
     elevation_profile = py3dep.elevation_profile(line, spacing=spacing, crs='EPSG:4326')
     elevation_profile.values = elevation_profile.values - radar_elevation
@@ -307,13 +378,6 @@ def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
 
     return elevation_profile_df
 
-def modify_xarray_timezone(ds, source_tz, target_tz):
-    time_utc = ds['time'].to_index().tz_localize(source_tz)
-    tz_corrected = time_utc.tz_convert(target_tz).tz_localize(None)
-    local_da=xr.DataArray.from_series(tz_corrected)
-    ds.coords.update({'local_time':tz_corrected})
-    return ds
-
 def get_radar_scan_ground_profile_from_raster(dem_file, lon, lat, bearing, radius, n_points):
     """_summary_
 
@@ -321,32 +385,14 @@ def get_radar_scan_ground_profile_from_raster(dem_file, lon, lat, bearing, radiu
         lon (_type_): _description_
         lat (_type_): _description_
         bearing (_type_): _description_
-        radius (_type_): _description_
+        radius (float): radius in kilometers
         spacing (int, optional): _description_. Defaults to 10.
     """
     radar_location = geopy.Point(lat, lon)
-    print('getting radar elevation')
     radar_elevation = py3dep.elevation_bycoords(
         [(radar_location.longitude, radar_location.latitude)]
     )[0]
-    print('got radar elevation')
-    positive_distance = geopy.distance.distance(
-        kilometers=radius
-    ).destination(
-        point=radar_location, 
-        bearing=bearing
-    )
-    negitive_distance = geopy.distance.distance(
-        kilometers=radius
-    ).destination(
-        point=radar_location, 
-        bearing=bearing-180
-    )
-    line = shapely.geometry.LineString([
-        shapely.geometry.Point(positive_distance.longitude, positive_distance.latitude),
-        shapely.geometry.Point(radar_location.longitude, radar_location.latitude),
-        shapely.geometry.Point(negitive_distance.longitude, negitive_distance.latitude)
-    ])
+    line = get_linestring(lon, lat, bearing, radius)
 
     line = gpd.GeoDataFrame(geometry=pd.Series([line])).set_crs('EPSG:4326').to_crs('EPSG:32613').geometry.iloc[0]
     distances = np.linspace(0, line.length, n_points)
@@ -359,5 +405,197 @@ def get_radar_scan_ground_profile_from_raster(dem_file, lon, lat, bearing, radiu
 
     return pd.DataFrame({
         'elevation': elevation_profile,
-        'distance': pd.Series(distances) - radius
+        'distance': pd.Series(distances) - radius*1000
     })
+
+
+def get_nightime_df(timezone, lat, lon, dates):
+    nighttime_df = pd.DataFrame()
+    loc = LocationInfo(timezone=timezone, latitude=lat, longitude=lon)
+    for date in dates:
+        s = sun(loc.observer, date=date, tzinfo=loc.timezone)
+        nighttime_df = pd.concat([
+            nighttime_df,
+            pd.DataFrame({
+                'datetime': [date],
+                'sunset': [s['sunset']],
+                'sunrise': [s['sunrise']],
+            } )
+        ], ignore_index=True)
+    # remove timezone info
+    nighttime_df['sunset'] = nighttime_df['sunset'].dt.tz_localize(None)
+    nighttime_df['sunrise'] = nighttime_df['sunrise'].dt.tz_localize(None)
+    # add partial first night:
+    nighttime_df = pd.concat([
+            pd.DataFrame({
+                'datetime': [np.nan],
+                'sunset': [np.nan],
+                'sunrise': [np.nan],
+            }),
+            nighttime_df,
+            pd.DataFrame({
+                'datetime': [np.nan],
+                'sunset': [np.nan],
+                'sunrise': [np.nan],
+            })
+        ], ignore_index=True)
+    nighttime_df['sunrise'] = nighttime_df['sunrise'].shift(-1)
+    nighttime_df.loc[0, 'sunset'] = pd.Series(sun(loc.observer, date=dates[0] - datetime.timedelta(days=1), tzinfo=loc.timezone)['sunset']).dt.tz_localize(None).iloc[0]
+    nighttime_df.loc[len(dates), 'sunrise'] = dates[-1] + datetime.timedelta(days=1) 
+    return nighttime_df.drop(nighttime_df.tail(1).index)
+
+
+def get_tidy_dataset(ds, variable_names):
+    """Convert an SoS netcdf xr.DataSet into a dataframe with time, height, tower, and measurement as indexes in a tidy dataset.
+
+    Args:
+        ds (_type_): Dataset to convert
+        variable_names (_type_): Variable names that you want operated on. Variables may not be supported.
+    """
+    tidy_df = ds[variable_names].to_dataframe().reset_index().melt(id_vars='time', value_vars=variable_names)
+    tidy_df['height'] = tidy_df['variable'].apply(height_from_variable_name)
+    tidy_df['tower'] = tidy_df['variable'].apply(tower_from_variable_name)
+    tidy_df['measurement'] = tidy_df['variable'].apply(measurement_from_variable_name)
+    return tidy_df
+
+
+
+
+
+def planar_fit_xarray(original_tidy_df):
+    return None
+    variable_triplets = [
+        ('u', 'v' 'w'), 
+        ('u_w_', 'v_w_', 'w_w_'), 
+        ('u_tc_', 'v_tc_', 'w_tc_'), 
+        ('u_h2o', 'v_h2o', 'w_h2o_'), 
+    ]
+    w = a + bu + cv
+
+
+def streamwise_coordinates_xarray(ds):
+    assert type(ds) == xr.DataSet
+
+    """ToDo: Implement for the dataset as it comes in the SOSNOQC format"""
+
+def streamwise_coordinates_single_rotation_tidy_df(original_tidy_df):
+    """Modify multiple data variables of a tidy_df created from a SoS netcdf dataset (see 
+    `get_tidy_dataset` abozve). Namely, the u and v velocity variables and all first and second 
+    covariances. A single rotation is used (no adjustment to the  vertical axis) based on the mean
+    u and v velocity over the provided time period. The returned dataset will have all relevant data 
+    variables replaced with rotated values.
+    Args:
+        tidy_df (pd.DataFrame): In the same format as the result of the `get_tidy_dataset` function 
+        above.
+    """
+
+    assert type(original_tidy_df) == pd.DataFrame
+
+    tidy_df = original_tidy_df.copy()
+
+    u_avg = tidy_df[tidy_df['measurement'] == 'u'].groupby(['tower', 'height'])['value'].mean()
+    v_avg = tidy_df[tidy_df['measurement'] == 'v'].groupby(['tower', 'height'])['value'].mean()
+    angles = np.arctan2(v_avg, u_avg)
+    D = angles.to_dict()
+    D
+
+    variable_pairs = [
+        ('u', 'v'), 
+        ('u_w_', 'v_w_'), 
+        ('u_tc_', 'v_tc_'), 
+        ('u_h2o_', 'v_h2o_'), 
+    ]
+    for u_var, v_var in variable_pairs:
+        for (tower, height), angle_rad in D.items():
+            us = tidy_df.loc[
+                    (tidy_df['tower'] == tower) & (tidy_df['height'] == height) & (tidy_df['measurement'] == u_var)
+                ]['value'].reset_index(drop=True)
+            vs = tidy_df.loc[
+                    (tidy_df['tower'] == tower) & (tidy_df['height'] == height) & (tidy_df['measurement'] == v_var)
+                ]['value'].reset_index(drop=True)
+            new_u = np.array(us*np.cos(angle_rad) + vs*np.sin(angle_rad))
+            new_v = np.array(-us*np.sin(angle_rad) + vs*np.cos(angle_rad))
+            tidy_df.loc[
+                    (tidy_df['tower'] == tower) & (tidy_df['height'] == height) & (tidy_df['measurement'] == u_var), 'value'] = new_u
+            tidy_df.loc[
+                    (tidy_df['tower'] == tower) & (tidy_df['height'] == height) & (tidy_df['measurement'] == v_var), 'value'] = new_v
+    return tidy_df
+
+
+    # u_avg = tidy_df[tidy_df['measurement'] == 'u'].groupby(['tower', 'height'])['value'].mean()
+    # v_avg = tidy_df[tidy_df['measurement'] == 'v'].groupby(['tower', 'height'])['value'].mean()
+    # angles = np.arctan(v_avg/u_avg)
+    # print(np.rad2deg(angles))
+    # D = angles.to_dict()
+    
+        
+    # df_wide = tidy_df.pivot_table(index=['time','tower','height'], values='value', columns='measurement').reset_index()
+    
+    # # convert u velocity
+    # df_wide['u'] = df_wide.apply(
+    #     lambda row: row['u']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)
+    #     ) + row['v']*np.sin(
+    #             D.get((row['tower'], row['height']), np.nan)
+    #     ),
+    #     axis=1
+    # )
+
+    # # # convert v velocity
+    # df_wide['v'] = df_wide.apply(
+    #     lambda row: - row['u']*np.sin(
+    #         D.get((row['tower'], row['height']), np.nan)) + row['v']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)),
+    #     axis=1
+    # )
+
+    # df_wide['u_w_'] = df_wide.apply(
+    #     lambda row: row['u_w_']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)) 
+    #     + row['v_w_']*np.sin(
+    #         D.get((row['tower'], row['height']), np.nan)
+    #     ),
+    #     axis=1
+    # )
+
+    # df_wide['v_w_'] = df_wide.apply(
+    #     lambda row: - row['u_w_']*np.sin(
+    #         D.get((row['tower'], row['height']), np.nan)
+    #     ) + row['v_w_']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)
+    #     ),
+    #     axis=1
+    # )
+
+    # df_wide['u_tc_'] = df_wide.apply(
+    #     lambda row: row['u_tc_']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)) + row['v_tc_']*np.sin(
+    #             D.get((row['tower'], row['height']), np.nan)),
+    #     axis=1
+    # )
+
+    # df_wide['v_tc_'] = df_wide.apply(
+    #     lambda row: - row['u_tc_']*np.sin(
+    #         D.get((row['tower'], row['height']), np.nan)) + row['v_tc_']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)),
+    #     axis=1
+    # )
+
+    # df_wide['u_h2o_'] = df_wide.apply(
+    #     lambda row: row['u_h2o_']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)) + row['v_h2o_']*np.sin(
+    #             D.get((row['tower'], row['height']), np.nan)),
+    #     axis=1
+    # )
+
+    # df_wide['v_h2o_'] = df_wide.apply(
+    #     lambda row: - row['u_h2o_']*np.sin(
+    #         D.get((row['tower'], row['height']), np.nan)) + row['v_h2o_']*np.cos(
+    #         D.get((row['tower'], row['height']), np.nan)),
+    #     axis=1
+    # )
+
+    # return df_wide.melt(
+    #     id_vars=['time', 'tower', 'height'], 
+    #     value_vars=tidy_df['measurement'].unique()
+    # )
