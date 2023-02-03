@@ -13,12 +13,9 @@ sys.path.append('/home/elilouis/sublimationofsnow')
 import sosutils
 from tempfile import TemporaryDirectory
 import numpy as np
-import seaborn as sns
 import geopy
-import geopandas as gpd
 from shapely import geometry
-import contextily as ctx
-
+import py3dep 
 ## Assumes this scan plan:
 # Volume scan: azi. 97-16˚9, elev. 6-31˚   31:18 --> 43
 # 330˚ RHI-half:              01:17 --> 02:51
@@ -123,6 +120,31 @@ def create_dl_plots(output_path, date, downvalley_distance):
         valleywise_df['elevation']
     ))
 
+    ## Retrieve the valley xsection ground profile
+    xsection_center_pt = geopy.distance.distance(
+        kilometers = downvalley_distance/1000
+    ).destination(
+        point = geopy.Point(sail_dl_pt.y, sail_dl_pt.x),
+        bearing = VALLEY_PLANE_AZIMUTH
+    )
+    profile_df = sosutils.get_radar_scan_ground_profile(
+        xsection_center_pt.longitude, 
+        xsection_center_pt.latitude, 
+        VALLEY_PLANE_AZIMUTH-90, 
+        2, 
+        spacing = 50
+    )
+    # add the elevation difference between the radar location and the xsection location to the returned profile 
+    # so that both the plotted radar data and profile are heights relative to the radar height - the returned 
+    # profile contains elevations relative to the elevation of point xsection_center_pt 
+    elevs = py3dep.elevation_bycoords(
+        [
+            (xsection_center_pt.longitude, xsection_center_pt.latitude), 
+            (sail_dl_pt.x, sail_dl_pt.y)
+        ]
+    )
+    profile_df['elevation'] = profile_df['elevation'] - (elevs[1] - elevs[0])
+
 
     ## Plot a valley-xsection of valleywise velocities using the provided downvalley_distance and DOWNVALLEY_XSECTION_AVERAGING_DISTANCE
     valley_xsection_df = valleywise_df.copy()
@@ -150,6 +172,7 @@ def create_dl_plots(output_path, date, downvalley_distance):
         )
         ax.title.set_text(pd.to_datetime(day_and_hour))
         ax.title.set_fontsize(8)
+        ax.plot(profile_df['distance'], profile_df['elevation'])
     fig.colorbar(hexplot, ax=axes.ravel().tolist())
     out = os.path.join(
         output_path,

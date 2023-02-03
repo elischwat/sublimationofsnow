@@ -11,6 +11,7 @@ import pytz
 import numpy as np
 import rasterio
 import geopandas as gpd
+from sklearn import linear_model
 
 from astral import LocationInfo
 from astral.sun import sun
@@ -355,7 +356,8 @@ def get_linestring(lon, lat, bearing, radius):
 
 
 def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
-    """_summary_
+    """Returns the ground profile relative to the provided point, i.e. the elevation at the
+    provided lon/lat is equal to 0 in the returned dataset.
 
     Args:
         lon (_type_): _description_
@@ -379,7 +381,8 @@ def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
     return elevation_profile_df
 
 def get_radar_scan_ground_profile_from_raster(dem_file, lon, lat, bearing, radius, n_points):
-    """_summary_
+    """Returns the ground profile relative to the provided point, i.e. the elevation at the
+    provided lon/lat is equal to 0 in the returned dataset.
 
     Args:
         lon (_type_): _description_
@@ -459,18 +462,69 @@ def get_tidy_dataset(ds, variable_names):
     return tidy_df
 
 
+def calculate_planar_fit(u,v,w):
+    # remove nans from u,v,w
+    temp_df = pd.DataFrame({'u': u, 'v': v, 'w': w}).dropna()
+    u = temp_df['u']
+    v = temp_df['v']
+    w = temp_df['w']
+    
+    # Fit, using least-squares, the averaged wind components to the equation of the plane,
+    # $ a = -bu - cv + w$
+    X_data = np.array([u, v]).reshape((-1,2))
+    Y_data = np.array(w)
+    reg = linear_model.LinearRegression().fit(X_data, Y_data)
+    a = reg.intercept_
+    b,c = reg.coef_
 
+    # Now define a new set of coordinates, streamwise coordinates, 
+    # <$U_f$, $V_f$, $W_f$>
+    # The normal vector to the plane defined by U_f and V_f is Wf, and is calculated
+    W_f = np.array([-b, -c, 1]) / np.sqrt( b**2 + c**2 + 1**2 )
+    tilt = np.arctan(np.sqrt(b**2 + c**2))
+    tiltaz = np.arctan2(-c, -b)
+    # Check that these two angles correctly define $W_f$ (floating point errors are ok)
+    assert (
+        all(W_f - ( np.sin(tilt)*np.cos(tiltaz), np.sin(tilt)*np.sin(tiltaz), np.cos(tilt)) < 10e-7)
+    )
 
+    return (a,b,c), (tilt, tiltaz), W_f
 
-def planar_fit_xarray(original_tidy_df):
-    return None
-    variable_triplets = [
-        ('u', 'v' 'w'), 
-        ('u_w_', 'v_w_', 'w_w_'), 
-        ('u_tc_', 'v_tc_', 'w_tc_'), 
-        ('u_h2o', 'v_h2o', 'w_h2o_'), 
-    ]
-    w = a + bu + cv
+def apply_planar_fit(u, v, w, a, W_f):
+    # # Define the sonic coordinate system unit vectors
+    U_s = np.array([1,0,0])
+    V_s = np.array([0,1,0])
+    W_s = np.array([0,0,1])
+
+    # Calculate the other axes of the mean flowwise coordinate system
+    U_f_normal_vector = np.cross(np.cross(W_f, U_s), W_f)
+    U_f = U_f_normal_vector / np.sqrt((U_f_normal_vector**2).sum())
+    V_f = np.cross(W_f, U_f)
+    
+    # Transform velocity measurements in sonic coords to mean flowwise coords
+    u_streamwise = np.dot(U_f, np.array([u, v, w - a]))
+    v_streamwise = np.dot(V_f, np.array([u, v, w - a]))
+    w_streamwise = np.dot(W_f, np.array([u, v, w - a]))
+
+    return (u_streamwise, v_streamwise, w_streamwise)
+
+def calculate_and_apply_planar_fit(u, v, w):
+    """Provides planar fit adjusted velocity components for a given dataset of u,v,w.
+
+    Args:
+        u (_type_): _description_
+        v (_type_): _description_
+        w (_type_): _description_
+
+    Returns:
+       (float,float,float), (float, float), (np.array, np.array, np.array):
+                 (a,b,c), (tilt (radians), tiltaz (rad)), (u_streamwise, v_streamwise, w_streamwise)
+    """
+    (a,b,c), (tilt, tiltaz), W_f = calculate_planar_fit(u, v, w)
+    (u_streamwise, v_streamwise, w_streamwise) = apply_planar_fit(u, v, w, a, W_f)
+    return (u_streamwise, v_streamwise, w_streamwise)
+
+    
 
 
 def streamwise_coordinates_xarray(ds):
