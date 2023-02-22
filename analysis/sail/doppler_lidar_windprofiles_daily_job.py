@@ -65,7 +65,7 @@ def create_dl_plots(output_path, date):
     speed_chart = alt.Chart(src_prof).transform_filter(
         alt.FieldOneOfPredicate('minute', [0,1])
     ).mark_circle(size=25).encode(
-        alt.X('wind_speed:Q', sort='-y', scale=alt.Scale(domain=[0,25], clamp=True, nice=False)),
+        alt.X('wind_speed:Q', title='wind speed (m/s)', sort='-y', scale=alt.Scale(domain=[0,25], clamp=True, nice=False)),
         alt.Y('height:Q', scale=alt.Scale(domain=[0,2000], clamp=True)),
         alt.Color("hour:O", scale=alt.Scale(scheme='turbo')),
     ).properties(width=150).facet(
@@ -76,7 +76,7 @@ def create_dl_plots(output_path, date):
     wind_dir_chart = alt.Chart(src_prof).transform_filter(
         alt.FieldOneOfPredicate('minute', [0,1])
     ).mark_circle(size=25).encode(
-        alt.X('wind_direction:Q', sort='-y', scale=alt.Scale(domain=[0,360], clamp=True, nice=False)),
+        alt.X('wind_direction:Q', sort='-y', axis=alt.Axis(values=[0, 90, 180, 270, 360]), scale=alt.Scale(domain=[0,360], clamp=True, nice=False)),
         alt.Y('height:Q', scale=alt.Scale(domain=[0,2000], clamp=True)),
         alt.Color("hour:O", scale=alt.Scale(scheme='turbo')),
     ).properties(width=150).facet(

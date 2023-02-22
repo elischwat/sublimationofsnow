@@ -16,6 +16,8 @@ from sklearn import linear_model
 from astral import LocationInfo
 from astral.sun import sun
 
+from metpy.units import units
+
 ROTATION_SUPPORTED_MEASUREMENTS = [
      'u',     'v',     
      'u_w_',     'v_w_', 
@@ -24,7 +26,7 @@ ROTATION_SUPPORTED_MEASUREMENTS = [
     ]
 
 
-def download_sos_highrate_data_hour(date = '20221031', hour = '00', local_download_dir = 'hr_noqc_geo'):
+def download_sos_highrate_data_hour(date = '20221031', hour = '00', local_download_dir = 'hr_noqc_geo', cache=False):
     """Download a netcdf file from the ftp url provided by the Earth Observing Laboratory at NCAR.
     Data is the high-rate, 20hz data.
 
@@ -42,16 +44,19 @@ def download_sos_highrate_data_hour(date = '20221031', hour = '00', local_downlo
     full_file_path = os.path.join('ftp://', base_url, path, file_example)
     download_file_path = os.path.join(local_download_dir, file_example)
 
-    urllib.request.urlretrieve(
-        full_file_path,
-        download_file_path   
-    )
-    
+    if cache and os.path.isfile(download_file_path):
+        print(f"Caching...skipping download for {date}, {hour}")
+    else:
+        urllib.request.urlretrieve(
+            full_file_path,
+            download_file_path   
+        )
+        
     return download_file_path
 
 
 
-def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc'):
+def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc', cache=False):
     """Download a netcdf file from the ftp url provided by the Earth Observing Laboratory at NCAR.
     Data is the daily data reynolds averaged to 5 minutes.
 
@@ -71,10 +76,13 @@ def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc'):
     full_file_path = os.path.join('ftp://', base_url, path, file_example)
     download_file_path = os.path.join(local_download_dir, file_example)
 
-    urllib.request.urlretrieve(
-        full_file_path,
-        download_file_path   
-    )
+    if cache and os.path.isfile(download_file_path):
+        print(f"Caching...skipping download for {date}")
+    else:
+        urllib.request.urlretrieve(
+            full_file_path,
+            download_file_path   
+        )
 
     return download_file_path
 
@@ -206,7 +214,9 @@ def measurement_from_variable_name(name):
     Returns:
         _type_: _description_
     """
-    if any([prefix in name for prefix in ['P_10m_', 'P_20m_']]):
+    if any([prefix in name for prefix in ['SF_avg_1m_ue', 'SF_avg_2m_ue']]): # these are the only two 
+        return 'snow flux'
+    elif any([prefix in name for prefix in ['P_10m_', 'P_20m_']]):
         return 'pressure'
     elif any([prefix in name for prefix in ['dir_1m_','dir_2m_','dir_3m_','dir_5m_','dir_10m_','dir_15m_','dir_20m_']]):
         return 'wind direction'
@@ -260,6 +270,16 @@ def measurement_from_variable_name(name):
         return 'shortwave radiation incoming'
     elif name == 'Rlw_out_9m_d':
         return 'shortwave radiation outgoing'
+    elif name in ['Vtherm_c', 'Vtherm_d', 'Vtherm_ue', 'Vtherm_uw']:
+        return "Vtherm"
+    elif name in ['Vpile_c', 'Vpile_d', 'Vpile_ue', 'Vpile_uw']:
+        return "Vpile"
+    elif name in ['IDir_c', 'IDir_d', 'IDir_ue', 'IDir_uw']:
+        return "IDir"
+    # NOTE: Tsurf IS NOT A SOSNOQC VARIABLE NAME
+    elif name in ['Tsurf_c', 'Tsurf_d', 'Tsurf_ue', 'Tsurf_uw']:
+        return "surface temperature"
+    
 
         
 def time_from_day_and_hhmm(
@@ -317,9 +337,9 @@ def merge_datasets_with_different_variables(ds_list, dim):
         )
     return new_ds
 
-def modify_df_timezone(df, source_tz, target_tz):
+def modify_df_timezone(df, source_tz, target_tz, time_col='time'):
     df = df.copy()
-    df['time'] = df['time'].dt.tz_localize(source_tz).dt.tz_convert(target_tz).dt.tz_localize(None)
+    df[time_col] = df[time_col].dt.tz_localize(source_tz).dt.tz_convert(target_tz).dt.tz_localize(None)
     return df
 
 def modify_xarray_timezone(ds, source_tz, target_tz):
@@ -576,6 +596,16 @@ def streamwise_coordinates_single_rotation_tidy_df(original_tidy_df):
     return tidy_df
 
 
+def fast_xarray_resample_mean(ds, resampling_time):
+    df_h = ds.to_dataframe().resample(resampling_time).mean()  # what we want (quickly), but in Pandas form
+    vals = [xr.DataArray(data=df_h[c], dims=['time'], coords={'time':df_h.index}, attrs=ds[c].attrs) for c in df_h.columns]
+    return  xr.Dataset(dict(zip(df_h.columns,vals)), attrs=ds.attrs)
+
+def fast_xarray_resample_median(ds, resampling_time):
+    df_h = ds.to_dataframe().resample(resampling_time).median()  # what we want (quickly), but in Pandas form
+    vals = [xr.DataArray(data=df_h[c], dims=['time'], coords={'time':df_h.index}, attrs=ds[c].attrs) for c in df_h.columns]
+    return  xr.Dataset(dict(zip(df_h.columns,vals)), attrs=ds.attrs)
+
     # u_avg = tidy_df[tidy_df['measurement'] == 'u'].groupby(['tower', 'height'])['value'].mean()
     # v_avg = tidy_df[tidy_df['measurement'] == 'v'].groupby(['tower', 'height'])['value'].mean()
     # angles = np.arctan(v_avg/u_avg)
@@ -653,3 +683,39 @@ def streamwise_coordinates_single_rotation_tidy_df(original_tidy_df):
     #     id_vars=['time', 'tower', 'height'], 
     #     value_vars=tidy_df['measurement'].unique()
     # )
+
+def apogee2temp(ds,tower):
+# hard-coded sensor-specific calibrations
+    Vref = 2.5
+    ID = ds[f"IDir_{tower}"].values
+    sns = [136, 137, 138, 139]
+    im = [ sns.index(x) if x in sns else None for x in ID ][0]
+# unclear if we want these, or scaled up versions
+    mC0 = [57508.575,56653.007,58756.588,58605.7861][im]
+    mC1 = [289.12189,280.03380,287.12487,285.00285][im]
+    mC2 = [2.16807,2.11478,2.11822,2.08932][im]
+    bC0 = [-168.3687,-319.9362,-214.5312,-329.6453][im]
+    bC1 = [-0.22672,-1.23812,-0.59308,-1.24657][im]
+    bC2 = [0.08927,0.08612,0.10936,0.09234][im]
+# read data
+    Vtherm = ds[f"Vtherm_{tower}"].values
+    Vpile = ds[f"Vpile_{tower}"].values*1000
+# calculation of detector temperature from Steinhart-Hart
+    Rt = 24900.0/((Vref/Vtherm) - 1)
+    Ac = 1.129241e-3
+    Bc = 2.341077e-4
+    Cc = 8.775468e-8
+    TDk = 1/(Ac + Bc*np.log(Rt) + Cc*(np.log(Rt)**3))
+    TDc = TDk - 273.15
+# finally, calculation of "target" temperature including thermopile measurement
+    m = mC2*TDc**2 + mC1*TDc + mC0
+    b = bC2*TDc**2 + bC1*TDc + bC0
+    TTc = (TDk**4 + m*Vpile + b)**0.25 - 273.15
+    # sufs = suffixes(TTc,leadch='') # get suffixes
+    # dimnames(TTc)[[2]] = paste0("Tsfc.Ap.",sufs)
+    TTc = TTc * units('celsius')
+    return TTc
+
+# class turbpy_helpers:
+#     def calculate_bulk_richardson()
+    

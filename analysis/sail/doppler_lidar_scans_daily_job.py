@@ -18,23 +18,30 @@ USERNAME = os.getenv("ARM_USERNAME")
 TOKEN = os.getenv("ARM_TOKEN")
 SAIL_DATA_STREAM = 'gucdlrhiM1.b1'
 SNR_THRESHOLD = 0.008
+DATE_FORMAT = "%Y-%m-%d"
 
 
 # %%
 def create_dl_plots(output_path, date):
     startdate = date
-    enddate = date
+    # also get data from the next day - UTC conversion
+    enddate = (
+        datetime.datetime.strptime(date, DATE_FORMAT) + datetime.timedelta(days=2)
+    ).strftime(DATE_FORMAT)
 
     with TemporaryDirectory() as temp_dir:
         act.discovery.download_data(USERNAME, TOKEN, SAIL_DATA_STREAM, startdate, enddate, output=temp_dir)
         dl_rhi_files = glob.glob(''.join([temp_dir, '/', SAIL_DATA_STREAM,'*cdf']))
         print(len(dl_rhi_files))
         dl_rhi = act.io.armfiles.read_netcdf(dl_rhi_files)
-
-    src_rhi = dl_rhi.to_dataframe().reset_index()
+        src_rhi = dl_rhi.to_dataframe().reset_index()
+    
     src_rhi['time'] = src_rhi['time'].dt.tz_localize('UTC').dt.tz_convert('US/Mountain')
-
     src_rhi['date'] = src_rhi['time'].dt.date
+    # get data for a complete, local time, day
+    src_rhi = src_rhi[
+        src_rhi['time'].dt.day == datetime.datetime.strptime(startdate, DATE_FORMAT).day
+    ]
 
     
     # Filter with SNR
@@ -118,8 +125,10 @@ def main():
         "-d",
         "--date",
         type=str,      
-        default=(datetime.datetime.today() - datetime.timedelta(days=2)).strftime("%Y-%m-%d"),
-        help="Date you want data from, in format '%Y-%m-%d'."
+         #default b/c data is in UTC, converting to local time means we need 2 day old (the most recently available)
+         # in addition to 3 day old data.
+        default=(datetime.datetime.today() - datetime.timedelta(days=3)).strftime(DATE_FORMAT),
+        help="Date you want data from, in format '%Y-%m-%d'. Default is 3 days before today, which is the most recent date data is usually posted for."
     )
     args = parser.parse_args()
     create_dl_plots(

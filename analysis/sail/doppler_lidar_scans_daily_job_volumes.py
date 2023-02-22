@@ -33,11 +33,15 @@ VALLEY_PLANE_AZIMUTH = 129 # points down valley
 sector_scan_hour = 21 # for an example plot of sector scans
 sail_dl_pt = geometry.Point(-106.987900,38.956160)
 kettle_ponds_pt = geometry.Point(-106.973006, 38.942005)
+DATE_FORMAT = "%Y-%m-%d"
 
 
 def create_dl_plots(output_path, date, downvalley_distance):
     startdate = date
-    enddate = date
+    # also get data from the next day - UTC conversion
+    enddate = (
+        datetime.datetime.strptime(date, DATE_FORMAT) + datetime.timedelta(days=2)
+    ).strftime(DATE_FORMAT)
 
     ## Download data
     with TemporaryDirectory() as temp_dir:
@@ -45,11 +49,17 @@ def create_dl_plots(output_path, date, downvalley_distance):
         dl_rhi_files = glob.glob(''.join([temp_dir, '/', SAIL_DATA_STREAM,'*cdf']))
         print(len(dl_rhi_files))
         dl_rhi = act.io.armfiles.read_netcdf(dl_rhi_files)
+        src_rhi = dl_rhi.to_dataframe().reset_index()
     
-    ## Preprocess data
-    src_rhi = dl_rhi.to_dataframe().reset_index().query('range < 2100')
     src_rhi['time'] = src_rhi['time'].dt.tz_localize('UTC').dt.tz_convert('US/Mountain')
     src_rhi['date'] = src_rhi['time'].dt.date
+    # get data for a complete, local time, day
+    src_rhi = src_rhi[
+        src_rhi['time'].dt.day == datetime.datetime.strptime(startdate, DATE_FORMAT).day
+    ]
+
+    ## Preprocess data
+    src_rhi = src_rhi.query('range < 2100')
     # RHI: convert polar coordinates to rectangular coords with the radar at (0,0)
     src_rhi['x'] = src_rhi['range']*np.cos(np.deg2rad(src_rhi['elevation']))
     src_rhi['z'] = src_rhi['range']*np.sin(np.deg2rad(src_rhi['elevation']))
@@ -197,7 +207,9 @@ def main():
         "-d",
         "--date",
         type=str,      
-        default=(datetime.datetime.today() - datetime.timedelta(days=2)).strftime("%Y-%m-%d"),
+         #default b/c data is in UTC, converting to local time means we need 2 day old (the most recently available)
+         # in addition to 3 day old data.
+        default=(datetime.datetime.today() - datetime.timedelta(days=3)).strftime(DATE_FORMAT),
         help="Date you want data from, in format '%Y-%m-%d'."
     )
     parser.add_argument(
