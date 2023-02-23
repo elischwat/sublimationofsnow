@@ -21,7 +21,7 @@ TOKEN = os.getenv("ARM_TOKEN")
 SAIL_DATA_STREAM = 'gucdlrhiM1.b1'
 SNR_THRESHOLD = 0.008
 DATE_FORMAT = "%Y-%m-%d"
-MAX_RANGE = 3000
+MAX_RANGE = 2000
 
 scan_azimuth_valley_wise = 149
 scan_azimuth_valley_cross = 270
@@ -144,13 +144,16 @@ def create_dl_plots(output_path, date):
                 vmax=5
             )
             ax.set_xlabel("East (negative) West (positive) Distance (m)")
+            ax.xaxis.label.set_fontsize(12)
             ax.set_ylabel("Height above LiDAR (m)")
+            ax.yaxis.label.set_fontsize(12)
             hour_str = f"{int(hour):02d}" if not np.isnan(int(hour)) else "NaT"
             minute_str = f"{int(src['minute'].min()):02d}" if not np.isnan(src['minute'].min()) else "NaT"
             ax.title.set_text(f"{hour_str}:{minute_str}")
-            ax.title.set_fontsize(8)
-            ax.set_xlim(-3000, 3000)
-            ax.set_ylim(0, 3000)
+            ax.title.set_fontsize(16)
+            ax.title.set_weight("bold")
+            ax.set_xlim(-MAX_RANGE, MAX_RANGE)
+            ax.set_ylim(0, MAX_RANGE)
             axins = inset_axes(
                 ax,
                 width="33%",
@@ -164,7 +167,7 @@ def create_dl_plots(output_path, date):
             [lab.set_fontweight(500) for lab in cbar.ax.get_xticklabels()]
             [lab.set_path_effects([pe.withStroke(linewidth=3, foreground="white")]) for lab in cbar.ax.get_xticklabels()]
 
-    plt.subplots_adjust(hspace=0.25)
+    plt.subplots_adjust(hspace=0.5)
     plt.suptitle(f"Cross-valley Scans (270˚) on {date}")
     output_file = os.path.join(output_path, date + '-cross-valley' + '.png')
     print(f'Saving figure to: {output_file}')
@@ -194,13 +197,16 @@ def create_dl_plots(output_path, date):
                 vmax=10
             )
             ax.set_xlabel("Upvalley (negative) Downvalley (positive) Distance (m)")
+            ax.xaxis.label.set_fontsize(12)
             ax.set_ylabel("Height above LiDAR (m)")
+            ax.yaxis.label.set_fontsize(12)
             hour_str = f"{int(hour):02d}" if not np.isnan(int(hour)) else "NaT"
             minute_str = f"{int(src['minute'].min()):02d}" if not np.isnan(src['minute'].min()) else "NaT"
             ax.title.set_text(f"{hour_str}:{minute_str}")
-            ax.title.set_fontsize(8)
-            ax.set_xlim(-3000, 3000)
-            ax.set_ylim(0, 3000)
+            ax.title.set_fontsize(16)
+            ax.title.set_weight("bold")
+            ax.set_xlim(-MAX_RANGE, MAX_RANGE)
+            ax.set_ylim(0, MAX_RANGE)
             axins = inset_axes(
                 ax,
                 width="33%",
@@ -213,7 +219,7 @@ def create_dl_plots(output_path, date):
             cbar = fig.colorbar(hexplot, cax=axins,  orientation="horizontal", ticks=[-10, 0, 10])
             [lab.set_fontweight(500) for lab in cbar.ax.get_xticklabels()]
             [lab.set_path_effects([pe.withStroke(linewidth=3, foreground="white")]) for lab in cbar.ax.get_xticklabels()]
-    plt.subplots_adjust(hspace=0.25)
+    plt.subplots_adjust(hspace=0.5)
     plt.suptitle(f"Along-valley Scans (149˚) ons {date}")
     output_file = os.path.join(output_path, date + '-along-valley' + '.png')
     print(f'Saving figure to: {output_file}')
