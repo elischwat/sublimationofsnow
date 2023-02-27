@@ -18,6 +18,8 @@ from astral.sun import sun
 
 from metpy.units import units
 
+import turbpy
+
 ROTATION_SUPPORTED_MEASUREMENTS = [
      'u',     'v',     
      'u_w_',     'v_w_', 
@@ -343,11 +345,18 @@ def modify_df_timezone(df, source_tz, target_tz, time_col='time'):
     return df
 
 def modify_xarray_timezone(ds, source_tz, target_tz):
+    ds = ds.copy()
     time_utc = ds['time'].to_index().tz_localize(source_tz)
     tz_corrected = time_utc.tz_convert(target_tz).tz_localize(None)
     local_da=xr.DataArray.from_series(tz_corrected)
-    ds.coords.update({'local_time':tz_corrected})
+    ds.coords.update({f'time ({target_tz})': tz_corrected})
+    ds.coords.update({f'time ({source_tz})': ds['time'].to_index()})
+    ds = ds.assign_coords({
+        'time': ds[f'time ({target_tz})'].values
+    })
     return ds
+
+
 
 def get_linestring(lon, lat, bearing, radius):
     radar_location = geopy.Point(lat, lon)
@@ -685,29 +694,29 @@ def fast_xarray_resample_median(ds, resampling_time):
     # )
 
 def apogee2temp(ds,tower):
-# hard-coded sensor-specific calibrations
+    # hard-coded sensor-specific calibrations
     Vref = 2.5
     ID = ds[f"IDir_{tower}"].values
     sns = [136, 137, 138, 139]
     im = [ sns.index(x) if x in sns else None for x in ID ][0]
-# unclear if we want these, or scaled up versions
+    # unclear if we want these, or scaled up versions
     mC0 = [57508.575,56653.007,58756.588,58605.7861][im]
     mC1 = [289.12189,280.03380,287.12487,285.00285][im]
     mC2 = [2.16807,2.11478,2.11822,2.08932][im]
     bC0 = [-168.3687,-319.9362,-214.5312,-329.6453][im]
     bC1 = [-0.22672,-1.23812,-0.59308,-1.24657][im]
     bC2 = [0.08927,0.08612,0.10936,0.09234][im]
-# read data
+    # read data
     Vtherm = ds[f"Vtherm_{tower}"].values
     Vpile = ds[f"Vpile_{tower}"].values*1000
-# calculation of detector temperature from Steinhart-Hart
+    # calculation of detector temperature from Steinhart-Hart
     Rt = 24900.0/((Vref/Vtherm) - 1)
     Ac = 1.129241e-3
     Bc = 2.341077e-4
     Cc = 8.775468e-8
     TDk = 1/(Ac + Bc*np.log(Rt) + Cc*(np.log(Rt)**3))
     TDc = TDk - 273.15
-# finally, calculation of "target" temperature including thermopile measurement
+    # finally, calculation of "target" temperature including thermopile measurement
     m = mC2*TDc**2 + mC1*TDc + mC0
     b = bC2*TDc**2 + bC1*TDc + bC0
     TTc = (TDk**4 + m*Vpile + b)**0.25 - 273.15
@@ -719,3 +728,187 @@ def apogee2temp(ds,tower):
 # class turbpy_helpers:
 #     def calculate_bulk_richardson()
     
+def get_turbpy_schemes():
+    # stab_titles are the names given to each stability scheme when plotting. In this example they correspond 
+    # to the dictionaries that contain the parameter values for each run. T
+    stab_titles = ('Standard',
+                #    'Louis (b = 4.7)',
+                #    'Louis (b = 12)',
+                #    'Louis (Ri capped, MJ98)',
+                'MO (Holtslag/de Bruin)',
+                #    'MO (Holtslag/de Bruin - capped)',
+                'MO (Beljaars/Holtslag)',
+                #    'MO (Webb - NoahMP)',
+                'MO (Cheng/Brutsaert)',
+                )
+
+    # A mapping between the titles and the stability methods used in each test.
+    stab_methods = {'Standard': 'standard',
+                    # 'Louis (b = 4.7)': 'louis',
+                    # 'Louis (b = 12)': 'louis',
+                    # 'Louis (Ri capped, MJ98)': 'louis',
+                    'MO (Holtslag/de Bruin)': 'monin_obukhov',
+                    # 'MO (Holtslag/de Bruin - capped)': 'monin_obukhov',
+                    'MO (Beljaars/Holtslag)': 'monin_obukhov',
+                    # 'MO (Webb - NoahMP)': 'monin_obukhov',
+                    'MO (Cheng/Brutsaert)': 'monin_obukhov',
+                }
+
+    # Thes gradient functions for the Monin-Obukhov methods
+    gradient_funcs = {'MO (Holtslag/de Bruin)': 'holtslag_debruin',
+                    #   'MO (Holtslag/de Bruin - capped)': 'holtslag_debruin',
+                    'MO (Beljaars/Holtslag)': 'beljaar_holtslag',
+                    #   'MO (Beljaars/Holtslag - capped)': 'beljaar_holtslag',
+                    'MO (Cheng/Brutsaert)': 'cheng_brutsaert',
+                    #   'MO (Webb - NoahMP)': 'webb_noahmp',
+                    }
+
+    # Parameters for the Louis scheme. Any method without a parameter value provided 
+    # is filled in with the default value
+    params = {'Louis (b = 4.7)': 9.4,
+            'Louis (Ri capped, MJ98)': 9.4,
+            'Louis (b = 12)': 24.}
+
+    # Indicates which methods have capping of the conductance. Any method without capping 
+    # indicated is assumed to have no capping.
+    capping = {
+        'Louis (Ri capped, MJ98)': 'louis_Ri_capping',
+        'MO (Holtslag/de Bruin - capped)': 'windless_exchange',
+        }
+
+    # Initialize the multi-level parameter dictionary
+    stab_dict = {}
+    # stab_dict['stability_params'] = {}
+
+    for st in stab_methods:
+        stab_dict[st] = {}
+        
+        # Assigning the stability method
+        stab_dict[st]['stability_method'] = stab_methods[st]
+        
+        # Assigning the gradient method
+        if 'monin_obukhov' in stab_methods[st]:
+            stab_dict[st]['monin_obukhov'] = {}
+            stab_dict[st]['monin_obukhov']['gradient_function'] = gradient_funcs[st]
+            
+        # Assiging the capping behavior
+        if st in capping.keys():
+            stab_dict[st]['capping'] = capping[st]
+        
+        # Determine stability params
+        if st in params.keys():
+            stab_dict[st]['stability_params'] = {stab_methods[st]: params[st]}    
+        
+    return stab_titles, stab_methods, stab_dict
+
+
+def tidy_df_calculate_richardson_number_with_turbpy(
+    tidy_df_original, 
+    tower, 
+    height, 
+    snowDepth,
+    pressure_height, 
+    fillna_method='ffill'
+):
+
+    sfcTemp = (tidy_df_original.query(f"variable == 'Tsurf_{tower}'")['value']+273.15).fillna(method=fillna_method)
+    airTemp = (tidy_df_original.query(f"variable == 'T_{height}m_{tower}'")['value']+273.15).fillna(method=fillna_method)
+    windspd = (tidy_df_original.query(f"variable == 'spd_{height}m_{tower}'")['value']).fillna(method=fillna_method)
+    airPressure = (
+        tidy_df_original.query(
+            f"variable == 'P_{pressure_height}m_{tower}'"
+        )['value'].fillna(
+            method=fillna_method
+        ).values * units.millibar
+    ).to(units.pascal).magnitude
+
+    (airVaporPress, _) = turbpy.satVapPress(airTemp - 273.15)
+    (sfcVaporPress, _) = turbpy.satVapPress(sfcTemp - 273.15)
+
+    return turbpy.bulkRichardson(
+        airTemp.values,
+        sfcTemp.values,
+        windspd.values,
+        height
+    )
+
+def tidy_df_model_heat_fluxes_with_turbpy(
+    tidy_df_original,
+    stab_titles, 
+    stab_methods,
+    stab_dict,
+    tower, 
+    height, 
+    snowDepth,
+    pressure_height, 
+    fillna_method='ffill'
+):
+    # collect inputs
+    sfcTemp = (tidy_df_original.query(f"variable == 'Tsurf_{tower}'")['value']+273.15).fillna(method=fillna_method)
+    airTemp = (tidy_df_original.query(f"variable == 'T_{height}m_{tower}'")['value']+273.15).fillna(method=fillna_method)
+    windspd = (tidy_df_original.query(f"variable == 'spd_{height}m_{tower}'")['value']).fillna(method=fillna_method)
+    airPressure = (
+        tidy_df_original.query(
+            f"variable == 'P_{pressure_height}m_{tower}'"
+        )['value'].fillna(
+            method=fillna_method
+        ).values * units.millibar
+    ).to(units.pascal).magnitude
+
+    (airVaporPress, _) = turbpy.satVapPress(airTemp - 273.15)
+    (sfcVaporPress, _) = turbpy.satVapPress(sfcTemp - 273.15)
+
+    ## Calculate stability
+
+    # Initialzie dictionaries for containing output
+    stability_correction = {}
+    conductance_sensible = {}
+    conductance_latent = {}
+    sensible_heat = {}
+    latent_heat = {}
+    zeta = {}
+
+    for stab in stab_titles:
+        stability_correction[stab] = np.zeros_like(sfcTemp)
+        conductance_sensible[stab] = np.zeros_like(sfcTemp)
+        conductance_latent[stab] = np.zeros_like(sfcTemp)
+        sensible_heat[stab] = np.zeros_like(sfcTemp)
+        latent_heat[stab] = np.zeros_like(sfcTemp)
+        zeta[stab] = np.zeros_like(sfcTemp)
+    
+    ## Calculate stability
+    for stab in stab_titles:
+        for n, (tair, vpair, tsfc, vpsfc, u, airP) in enumerate(zip(airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure)):
+
+            # Offline Turbulence Package
+            (conductance_sensible[stab][n], 
+            conductance_latent[stab][n], 
+            sensible_heat[stab][n],
+            latent_heat[stab][n],
+            stab_output, p_test) = turbpy.turbFluxes(tair, airP,
+                                                    vpair, u, tsfc,
+                                                    vpsfc, snowDepth,
+                                                    height, param_dict=stab_dict[stab],
+                                                    z0Ground=.005)
+            
+            # Unpack stability parameters dictionary
+            if not 'monin_obukhov' in stab_methods[stab]:
+                stability_correction[stab][n] = stab_output['stabilityCorrection']
+            else:
+                stability_correction[stab][n] = np.nan
+                zeta[stab][n] = stab_output['zeta']
+
+    return (stability_correction, conductance_sensible, conductance_latent, sensible_heat, latent_heat, zeta)
+
+def tidy_df_add_variable(tidy_df_original, variable_new, variable, measurement, height, tower):
+    new_data_df = pd.DataFrame({
+        'time': tidy_df_original.time.drop_duplicates(),
+        'value': variable_new
+    }).assign(
+        variable = variable,
+        measurement = measurement,
+        height = height,
+        tower = tower
+    )
+
+    return pd.concat([tidy_df_original, new_data_df])
