@@ -51,7 +51,7 @@ def create_dl_plots(output_path, startdate):
             objs.append(wind_obj)
         wind_obj = xr.merge(objs)
 
-    src_prof = wind_obj.to_dataframe().reset_index()
+    src_prof = wind_obj.resample(time='60Min').median().to_dataframe().reset_index()
     src_prof = src_prof.reset_index().set_index('time').tz_localize("UTC").tz_convert("US/Mountain").tz_localize(None).reset_index()
     # get data for a complete, local time, day
     src_prof = src_prof[
@@ -71,9 +71,7 @@ def create_dl_plots(output_path, startdate):
     )
 
     # for hr_group in src_prof.hour_group.
-    speed_chart = alt.Chart(src_prof).transform_filter(
-        alt.datum.minute==14
-    ).mark_circle(size=25).encode(
+    speed_chart = alt.Chart(src_prof).mark_circle(size=25).encode(
         alt.X('wind_speed:Q', title='wind speed (m/s)', sort='-y', scale=alt.Scale(domain=[0,25], clamp=True, nice=False)),
         alt.Y('height:Q', scale=alt.Scale(domain=[0,2000], clamp=True)),
         alt.Color("hour:O", scale=alt.Scale(scheme='turbo')),
@@ -82,9 +80,7 @@ def create_dl_plots(output_path, startdate):
     ).resolve_scale(color='independent')
 
     # for hr_group in src_prof.hour_group.
-    wind_dir_chart = alt.Chart(src_prof).transform_filter(
-        alt.datum.minute==14
-    ).mark_circle(size=25).encode(
+    wind_dir_chart = alt.Chart(src_prof).mark_circle(size=25).encode(
         alt.X('wind_direction:Q', sort='-y', axis=alt.Axis(values=[0, 90, 180, 270, 360]), scale=alt.Scale(domain=[0,360], clamp=True, nice=False)),
         alt.Y('height:Q', scale=alt.Scale(domain=[0,2000], clamp=True)),
         alt.Color("hour:O", scale=alt.Scale(scheme='turbo')),

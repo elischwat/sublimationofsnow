@@ -140,8 +140,8 @@ def create_dl_plots(output_path, date):
                 src['z'], 
                 C=src['radial_velocity'], 
                 cmap='RdYlBu',
-                vmin=-5,
-                vmax=5
+                vmin=-10,
+                vmax=10
             )
             ax.set_xlabel("East (negative) West (positive) Distance (m)")
             ax.xaxis.label.set_fontsize(12)
