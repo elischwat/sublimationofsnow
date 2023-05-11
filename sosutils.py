@@ -58,7 +58,7 @@ def download_sos_highrate_data_hour(date = '20221031', hour = '00', local_downlo
 
 
 
-def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc', cache=False):
+def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc', cache=False,  planar_fit = False):
     """Download a netcdf file from the ftp url provided by the Earth Observing Laboratory at NCAR.
     Data is the daily data reynolds averaged to 5 minutes.
 
@@ -70,13 +70,25 @@ def download_sos_data_day(date = '20221101', local_download_dir = 'sosnoqc', cac
         _type_: _description_
     """
     base_url = 'ftp.eol.ucar.edu'
-    path = 'pub/archive/isfs/projects/SOS/netcdf/noqc_geo'
-    file_example = f'isfs_{date}.nc'
+    if planar_fit:
+        path = 'pub/archive/isfs/projects/SOS/netcdf/noqc_geo_tiltcor/'
+    else:
+        path = 'pub/archive/isfs/projects/SOS/netcdf/noqc_geo'
+    
+    if planar_fit:
+        file_example =  f'isfs_sos_tiltcor_{date}.nc'
+
+    else:
+        file_example = f'isfs_{date}.nc'
 
     os.makedirs(local_download_dir, exist_ok=True)
 
     full_file_path = os.path.join('ftp://', base_url, path, file_example)
-    download_file_path = os.path.join(local_download_dir, file_example)
+    if planar_fit:
+        download_file_path = os.path.join(local_download_dir, 'planar_fit', file_example)
+    else:
+        download_file_path = os.path.join(local_download_dir, file_example)
+    
 
     if cache and os.path.isfile(download_file_path):
         print(f"Caching...skipping download for {date}")
@@ -114,8 +126,67 @@ def height_from_variable_name(name):
     Returns:
         _type_: _description_
     """
-    
-    if '_1m_' in name:
+    # handle the soil moisture depths
+    if '_0_6cm' in name:
+        return -0.006
+    elif '_1_9cm' in name:
+        return -0.019
+    elif '_3_1cm' in name:
+        return -0.031
+    elif '_4_4cm' in name:
+        return -0.044
+    elif '_8_1cm' in name:
+        return -0.081
+    elif '_9_4cm' in name:
+        return -0.094
+    elif '_10_6cm' in name:
+        return -.106
+    elif '_11_9cm' in name:
+        return -.119
+    elif '_18_1cm' in name:
+        return -.181
+    elif '_19_4cm' in name:
+        return -.194
+    elif '_20_6cm' in name:
+        return -.206
+    elif '_21_9cm' in name:
+        return -.219
+    elif '_28_1cm' in name:
+        return -.281
+    elif '_29_4cm' in name:
+        return -.294
+    elif '_30_6cm' in name:
+        return -.306
+    elif '_31_9cm' in name:
+        return -.319
+    #snow temperature depths - these should be handled before tower depths because, 
+    # for example '_4m_' is in '_0_4m_'
+    elif '_0_4m_' in name:
+        return 0.4
+    elif '_0_5m_' in name:
+        return 0.5
+    elif '_0_6m_' in name:
+        return 0.6
+    elif '_0_7m_' in name:
+        return 0.7
+    elif '_0_8m_' in name:
+        return 0.8
+    elif '_0_9m_' in name:
+        return 0.9
+    elif '_1_0m_' in name:
+        return 1.0
+    elif '_1_1m_' in name:
+        return 1.1
+    elif '_1_2m_' in name:
+        return 1.2
+    elif '_1_3m_' in name:
+        return 1.3
+    elif '_1_4m_' in name:
+        return 1.4
+    elif '_1_5m_' in name:
+        return 1.5
+    # tower depths
+    elif '_1m_' in name:
         return 1
     elif '_2m_' in name:
         return 2
@@ -155,39 +226,9 @@ def height_from_variable_name(name):
         return 19
     elif '_20m_' in name:
         return 20
-    # handle the soil moisture depths
-    elif '_0_6cm' in name:
-        return -0.006
-    elif '_1_9cm' in name:
-        return -0.019
-    elif '_3_1cm' in name:
-        return -0.031
-    elif '_4_4cm' in name:
-        return -0.044
-    elif '_8_1cm' in name:
-        return -0.081
-    elif '_9_4cm' in name:
-        return -0.094
-    elif '_10_6cm' in name:
-        return -.106
-    elif '_11_9cm' in name:
-        return -.119
-    elif '_18_1cm' in name:
-        return -.181
-    elif '_19_4cm' in name:
-        return -.194
-    elif '_20_6cm' in name:
-        return -.206
-    elif '_21_9cm' in name:
-        return -.219
-    elif '_28_1cm' in name:
-        return -.281
-    elif '_29_4cm' in name:
-        return -.294
-    elif '_30_6cm' in name:
-        return -.306
-    elif '_31_9cm' in name:
-        return -.319
+    # surface measurements
+    elif name.startswith('Tsurf_'):
+        return 0
 
 def tower_from_variable_name(name):
     """Parse instrument/sensor tower from EOL variable names.
@@ -216,6 +257,7 @@ def measurement_from_variable_name(name):
     Returns:
         _type_: _description_
     """
+    # VARIABLE NAMES THAT COME FROM THE SOSNOQC DATASETS
     if any([prefix in name for prefix in ['SF_avg_1m_ue', 'SF_avg_2m_ue']]): # these are the only two 
         return 'snow flux'
     elif any([prefix in name for prefix in ['P_10m_', 'P_20m_']]):
@@ -230,6 +272,12 @@ def measurement_from_variable_name(name):
         return 'v'
     elif any([prefix in name for prefix in ['w_1m_','w_2m_','w_3m_','w_5m_','w_10m_','w_15m_','w_20m_']]):
         return 'w'
+    elif any([prefix in name for prefix in ['u_u__1m_', 'u_u__2m_', 'u_u__3m_', 'u_u__5m_', 'u_u__10m_', 'u_u__15m_', 'u_u__20m_']]):
+        return 'u_u_'
+    elif any([prefix in name for prefix in ['v_v__1m_', 'v_v__2m_', 'v_v__3m_', 'v_v__5m_', 'v_v__10m_', 'v_v__15m_', 'v_v__20m_']]):
+        return 'v_v_'
+    elif any([prefix in name for prefix in ['w_w__1m_', 'w_w__2m_', 'w_w__3m_', 'w_w__5m_', 'w_w__10m_', 'w_w__15m_', 'w_w__20m_']]):
+        return 'w_w_'
     elif any([prefix in name for prefix in ['u_w__1m_','u_w__2m_','u_w__3m_','u_w__5m_','u_w__10m_','u_w__15m_','u_w__20m_']]):
         return 'u_w_'
     elif any([prefix in name for prefix in ['v_w__1m_','v_w__2m_','v_w__3m_','v_w__5m_','v_w__10m_','v_w__15m_','v_w__20m_']]):
@@ -254,9 +302,6 @@ def measurement_from_variable_name(name):
         return 'RH'
     elif any([prefix in name for prefix in ['tc_1m', 'tc_2m', 'tc_3m', 'tc_5m', 'tc_10m', 'tc_15m', 'tc_20m']]):
         return 'virtual temperature'
-    # NOTE: Tpot IS NOT A SOSNOQC VARIABLE NAME
-    elif any([prefix in name for prefix in ['Tpot_1m_', 'Tpot_2m_', 'Tpot_3m_', 'Tpot_4m_', 'Tpot_5m_', 'Tpot_6m_', 'Tpot_7m_', 'Tpot_8m_', 'Tpot_9m_', 'Tpot_10m_', 'Tpot_11m_', 'Tpot_12m_', 'Tpot_13m_', 'Tpot_14m_', 'Tpot_15m_', 'Tpot_16m_', 'Tpot_17m_', 'Tpot_18m_', 'Tpot_19m_', 'Tpot_20m_']]):
-        return 'potential temperature'
     elif any([prefix in name for prefix in ['Tsoil_3_1cm_d', 'Tsoil_8_1cm_d', 'Tsoil_18_1cm_d', 'Tsoil_28_1cm_d', 'Tsoil_4_4cm_d', 'Tsoil_9_4cm_d', 'Tsoil_19_4cm_d', 'Tsoil_29_4cm_d', 'Tsoil_0_6cm_d',  'Tsoil_10_6cm_d', 'Tsoil_20_6cm_d', 'Tsoil_30_6cm_d', 'Tsoil_1_9cm_d', 'Tsoil_11_9cm_d', 'Tsoil_21_9cm_d', 'Tsoil_31_9cm_d']]):
         return 'soil temperature'
     elif name == 'Gsoil_d':
@@ -267,20 +312,25 @@ def measurement_from_variable_name(name):
         return 'shortwave radiation incoming'
     elif name == 'Rsw_out_9m_d':
         return 'shortwave radiation outgoing'
-    # these following Rlw variables do not actually come in the NCAR provided datasets, but are consistent with their naming schema
-    elif name == 'Rlw_in_9m_d':
-        return 'shortwave radiation incoming'
-    elif name == 'Rlw_out_9m_d':
-        return 'shortwave radiation outgoing'
     elif name in ['Vtherm_c', 'Vtherm_d', 'Vtherm_ue', 'Vtherm_uw']:
         return "Vtherm"
     elif name in ['Vpile_c', 'Vpile_d', 'Vpile_ue', 'Vpile_uw']:
         return "Vpile"
     elif name in ['IDir_c', 'IDir_d', 'IDir_ue', 'IDir_uw']:
         return "IDir"
-    # NOTE: Tsurf IS NOT A SOSNOQC VARIABLE NAME
-    elif name in ['Tsurf_c', 'Tsurf_d', 'Tsurf_ue', 'Tsurf_uw']:
+    elif any([prefix in name for prefix in ['Tsnow_0_4m_', 'Tsnow_0_5m_', 'Tsnow_0_6m_', 'Tsnow_0_7m_', 'Tsnow_0_8m_', 'Tsnow_0_9m_', 'Tsnow_1_0m_', 'Tsnow_1_1m_', 'Tsnow_1_2m_', 'Tsnow_1_3m_', 'Tsnow_1_4m_', 'Tsnow_1_5m_']]):
+        return 'snow temperature'
+    # VARIABLE NAMES THAT do not COME FROM THE SOSNOQC DATASETS but we add and use a naming schema consistent with SOSNOQC dataset naming schema
+    elif any([prefix in name for prefix in ['Tpot_1m_', 'Tpot_2m_', 'Tpot_3m_', 'Tpot_4m_', 'Tpot_5m_', 'Tpot_6m_', 'Tpot_7m_', 'Tpot_8m_', 'Tpot_9m_', 'Tpot_10m_', 'Tpot_11m_', 'Tpot_12m_', 'Tpot_13m_', 'Tpot_14m_', 'Tpot_15m_', 'Tpot_16m_', 'Tpot_17m_', 'Tpot_18m_', 'Tpot_19m_', 'Tpot_20m_']]):
+        return 'potential temperature'
+    elif name == 'Rlw_in_9m_d':
+        return 'longwave radiation incoming'
+    elif name == 'Rlw_out_9m_d':
+        return 'longwave radiation outgoing'
+    elif name in ['Tsurf_c', 'Tsurf_d', 'Tsurf_ue', 'Tsurf_uw', 'Tsurf_rad_d']:
         return "surface temperature"
+    elif any([prefix in name for prefix in ['tke_1m_',    'tke_2m_',    'tke_3m_',    'tke_5m_',    'tke_10m_',    'tke_15m_',    'tke_20m_']]):
+        return "turbulent kinetic energy"
     
 
         
@@ -311,7 +361,9 @@ def time_from_day_and_hhmm(
 # if already downloaded
 
 def merge_datasets_with_different_variables(ds_list, dim):
-    """ This gets slow with lots of datasets
+    """ Take a list of datasets and merge them using xr.merge. First check that the two datasets
+    have the same data vars. If they do not, missing data vars in each dataset are added with nan values
+    so that the two datasets have the same set of data vars. NOTE: This gets slow with lots of datasets
 
     Args:
         ds_list (_type_): _description_
@@ -696,19 +748,19 @@ def fast_xarray_resample_median(ds, resampling_time):
 def apogee2temp(ds,tower):
     # hard-coded sensor-specific calibrations
     Vref = 2.5
-    ID = ds[f"IDir_{tower}"].values
-    sns = [136, 137, 138, 139]
+    ID = ds[f"IDir_{tower}"]
+    sns = [136, 137, 138, 139, 140]
     im = [ sns.index(x) if x in sns else None for x in ID ][0]
     # unclear if we want these, or scaled up versions
-    mC0 = [57508.575,56653.007,58756.588,58605.7861][im]
-    mC1 = [289.12189,280.03380,287.12487,285.00285][im]
-    mC2 = [2.16807,2.11478,2.11822,2.08932][im]
-    bC0 = [-168.3687,-319.9362,-214.5312,-329.6453][im]
-    bC1 = [-0.22672,-1.23812,-0.59308,-1.24657][im]
-    bC2 = [0.08927,0.08612,0.10936,0.09234][im]
+    mC0 = [57508.575,56653.007,58756.588,58605.7861, 58756.588][im] * 1e5
+    mC1 = [289.12189,280.03380,287.12487,285.00285, 287.12487][im] * 1e5
+    mC2 = [2.16807,2.11478,2.11822,2.08932, 2.11822][im] * 1e5
+    bC0 = [-168.3687,-319.9362,-214.5312,-329.6453, -214.5312][im]* 1e5
+    bC1 = [-0.22672,-1.23812,-0.59308,-1.24657, -0.59308][im]* 1e5
+    bC2 = [0.08927,0.08612,0.10936,0.09234, 0.10936][im]* 1e5
     # read data
-    Vtherm = ds[f"Vtherm_{tower}"].values
-    Vpile = ds[f"Vpile_{tower}"].values*1000
+    Vtherm = ds[f"Vtherm_{tower}"]
+    Vpile = ds[f"Vpile_{tower}"]*1000
     # calculation of detector temperature from Steinhart-Hart
     Rt = 24900.0/((Vref/Vtherm) - 1)
     Ac = 1.129241e-3
@@ -735,11 +787,11 @@ def get_turbpy_schemes():
                 #    'Louis (b = 4.7)',
                 #    'Louis (b = 12)',
                 #    'Louis (Ri capped, MJ98)',
-                'MO (Holtslag/de Bruin)',
+                'MO_HdB', #Holtslag/de Bruin',
                 #    'MO (Holtslag/de Bruin - capped)',
-                'MO (Beljaars/Holtslag)',
+                # 'MO (Beljaars/Holtslag)',
                 #    'MO (Webb - NoahMP)',
-                'MO (Cheng/Brutsaert)',
+                # 'MO (Cheng/Brutsaert)',
                 )
 
     # A mapping between the titles and the stability methods used in each test.
@@ -747,19 +799,19 @@ def get_turbpy_schemes():
                     # 'Louis (b = 4.7)': 'louis',
                     # 'Louis (b = 12)': 'louis',
                     # 'Louis (Ri capped, MJ98)': 'louis',
-                    'MO (Holtslag/de Bruin)': 'monin_obukhov',
+                    'MO_HdB': 'monin_obukhov',
                     # 'MO (Holtslag/de Bruin - capped)': 'monin_obukhov',
-                    'MO (Beljaars/Holtslag)': 'monin_obukhov',
+                    # 'MO (Beljaars/Holtslag)': 'monin_obukhov',
                     # 'MO (Webb - NoahMP)': 'monin_obukhov',
-                    'MO (Cheng/Brutsaert)': 'monin_obukhov',
+                    # 'MO (Cheng/Brutsaert)': 'monin_obukhov',
                 }
 
     # Thes gradient functions for the Monin-Obukhov methods
-    gradient_funcs = {'MO (Holtslag/de Bruin)': 'holtslag_debruin',
+    gradient_funcs = {'MO_HdB': 'holtslag_debruin',
                     #   'MO (Holtslag/de Bruin - capped)': 'holtslag_debruin',
-                    'MO (Beljaars/Holtslag)': 'beljaar_holtslag',
+                    # 'MO (Beljaars/Holtslag)': 'beljaar_holtslag',
                     #   'MO (Beljaars/Holtslag - capped)': 'beljaar_holtslag',
-                    'MO (Cheng/Brutsaert)': 'cheng_brutsaert',
+                    # 'MO (Cheng/Brutsaert)': 'cheng_brutsaert',
                     #   'MO (Webb - NoahMP)': 'webb_noahmp',
                     }
 
@@ -808,22 +860,21 @@ def tidy_df_calculate_richardson_number_with_turbpy(
     height, 
     snowDepth,
     pressure_height, 
-    fillna_method='ffill'
+    fillna_method='ffill',
+    surface_temp_col_substitute = None
 ):
 
-    sfcTemp = (tidy_df_original.query(f"variable == 'Tsurf_{tower}'")['value']+273.15).fillna(method=fillna_method)
-    airTemp = (tidy_df_original.query(f"variable == 'T_{height}m_{tower}'")['value']+273.15).fillna(method=fillna_method)
-    windspd = (tidy_df_original.query(f"variable == 'spd_{height}m_{tower}'")['value']).fillna(method=fillna_method)
-    airPressure = (
-        tidy_df_original.query(
-            f"variable == 'P_{pressure_height}m_{tower}'"
-        )['value'].fillna(
-            method=fillna_method
-        ).values * units.millibar
-    ).to(units.pascal).magnitude
+    if surface_temp_col_substitute:
+        sfcTemp = (tidy_df_original.query(f"variable == '{surface_temp_col_substitute}'")['value']+273.15).fillna(method=fillna_method)
+    else:
+        sfcTemp = (tidy_df_original.query(f"variable == 'Tsurf_{tower}'")['value']+273.15).fillna(method=fillna_method)
+    # all temperature sensors are on tower c
+    airTemp = (tidy_df_original.query(f"variable == 'T_{height}m_c'")['value']+273.15).fillna(method=fillna_method)
+    # in the case where you try to grab 1m Tower C data, it will not be available for much of the season - get 2m temp data to replace
+    if (not all(airTemp) and height == 1) or (len(airTemp) == 0 and height == 1):
+        airTemp = (tidy_df_original.query(f"variable == 'T_2m_c'")['value']+273.15).fillna(method=fillna_method)
 
-    (airVaporPress, _) = turbpy.satVapPress(airTemp - 273.15)
-    (sfcVaporPress, _) = turbpy.satVapPress(sfcTemp - 273.15)
+    windspd = (tidy_df_original.query(f"variable == 'spd_{height}m_{tower}'")['value']).fillna(method=fillna_method)
 
     return turbpy.bulkRichardson(
         airTemp.values,
@@ -841,12 +892,22 @@ def tidy_df_model_heat_fluxes_with_turbpy(
     height, 
     snowDepth,
     pressure_height, 
-    fillna_method='ffill'
+    fillna_method='ffill',
+    surface_temp_col_substitute = None
 ):
     # collect inputs
-    sfcTemp = (tidy_df_original.query(f"variable == 'Tsurf_{tower}'")['value']+273.15).fillna(method=fillna_method)
-    airTemp = (tidy_df_original.query(f"variable == 'T_{height}m_{tower}'")['value']+273.15).fillna(method=fillna_method)
+    if surface_temp_col_substitute:
+        sfcTemp = (tidy_df_original.query(f"variable == '{surface_temp_col_substitute}'")['value']+273.15).fillna(method=fillna_method)
+    else:
+        sfcTemp = (tidy_df_original.query(f"variable == 'Tsurf_{tower}'")['value']+273.15).fillna(method=fillna_method)
+    # all temperature sensors are on tower c
+    airTemp = (tidy_df_original.query(f"variable == 'T_{height}m_c'")['value']+273.15).fillna(method=fillna_method)
+    # in the case where you try to grab 1m Tower C data, it will not be available for much of the season - get 2m temp data to replace
+    if (not all(airTemp) and height == 1) or (len(airTemp) == 0 and height == 1):
+        airTemp = (tidy_df_original.query(f"variable == 'T_2m_c'")['value']+273.15).fillna(method=fillna_method)
     windspd = (tidy_df_original.query(f"variable == 'spd_{height}m_{tower}'")['value']).fillna(method=fillna_method)
+    
+    windspd
     airPressure = (
         tidy_df_original.query(
             f"variable == 'P_{pressure_height}m_{tower}'"
@@ -875,28 +936,40 @@ def tidy_df_model_heat_fluxes_with_turbpy(
         sensible_heat[stab] = np.zeros_like(sfcTemp)
         latent_heat[stab] = np.zeros_like(sfcTemp)
         zeta[stab] = np.zeros_like(sfcTemp)
-    
+
     ## Calculate stability
     for stab in stab_titles:
         for n, (tair, vpair, tsfc, vpsfc, u, airP) in enumerate(zip(airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure)):
-
-            # Offline Turbulence Package
-            (conductance_sensible[stab][n], 
-            conductance_latent[stab][n], 
-            sensible_heat[stab][n],
-            latent_heat[stab][n],
-            stab_output, p_test) = turbpy.turbFluxes(tair, airP,
-                                                    vpair, u, tsfc,
-                                                    vpsfc, snowDepth,
-                                                    height, param_dict=stab_dict[stab],
-                                                    z0Ground=.005)
-            
-            # Unpack stability parameters dictionary
-            if not 'monin_obukhov' in stab_methods[stab]:
-                stability_correction[stab][n] = stab_output['stabilityCorrection']
-            else:
-                stability_correction[stab][n] = np.nan
-                zeta[stab][n] = stab_output['zeta']
+            try:
+                # Offline Turbulence Package
+                (conductance_sensible[stab][n], 
+                conductance_latent[stab][n], 
+                sensible_heat[stab][n],
+                latent_heat[stab][n],
+                stab_output, p_test) = turbpy.turbFluxes(tair, airP,
+                                                        vpair, u, tsfc,
+                                                        vpsfc, snowDepth,
+                                                        height, param_dict=stab_dict[stab],
+                                                        z0Ground=.005, groundSnowFraction=1)
+                # Unpack stability parameters dictionary
+                if not 'monin_obukhov' in stab_methods[stab]:
+                    stability_correction[stab][n] = stab_output['stabilityCorrection']
+                else:
+                    stability_correction[stab][n] = np.nan
+                    zeta[stab][n] = stab_output['zeta']
+            except:
+                conductance_sensible[stab][n] = None
+                conductance_latent[stab][n] = None
+                sensible_heat[stab][n] = None
+                latent_heat[stab][n] = None
+                stab_output = None
+                p_test = None
+                # Unpack stability parameters dictionary
+                if not 'monin_obukhov' in stab_methods[stab]:
+                    stability_correction[stab][n] = np.nan
+                else:
+                    stability_correction[stab][n] = np.nan
+                    zeta[stab][n] = np.nan
 
     return (stability_correction, conductance_sensible, conductance_latent, sensible_heat, latent_heat, zeta)
 
