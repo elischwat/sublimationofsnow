@@ -16,3 +16,5 @@ kp_radar_windspeed.pickle
 analysis/kps_Radar_FMCW_Moment/**
 analysis/xprecip/**
 **sosnoqc**
+
+**/altair-data-**.json

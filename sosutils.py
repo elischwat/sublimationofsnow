@@ -12,10 +12,13 @@ import numpy as np
 import rasterio
 import geopandas as gpd
 from sklearn import linear_model
+from scipy.optimize import curve_fit
 
 from astral import LocationInfo
 from astral.sun import sun
 
+import pint_xarray
+import metpy.constants
 from metpy.units import units
 
 import turbpy
@@ -331,6 +334,34 @@ def measurement_from_variable_name(name):
         return "surface temperature"
     elif any([prefix in name for prefix in ['tke_1m_',    'tke_2m_',    'tke_3m_',    'tke_5m_',    'tke_10m_',    'tke_15m_',    'tke_20m_']]):
         return "turbulent kinetic energy"
+    elif name.startswith('Ri'):
+        return 'richardson number'
+    elif name.startswith('Tpotvirtual'):
+        return 'potential virtual temperature'
+    elif name.startswith('Tsurfairdensity'):
+        return 'air density'
+    elif name.startswith('Tsurfmixingratio'):
+        return 'mixing ratio'
+    elif name.startswith('Tsurfpot'):
+        return 'surface potential temperature'
+    elif name.startswith('Tsurfpotvirtual'):
+        return 'surface potential virtual temperature'
+    elif name.startswith('Tsurfvirtual'):
+        return 'surface virtual temperature'
+    elif name.startswith('Tvirtual'):
+        return 'virtual temperature'
+    elif name.startswith('airdensity'):
+        return 'ait density'
+    elif name.startswith('mixingratio'):
+        return 'mixing ratio'
+    elif name.startswith('temp_gradient'):
+        return 'temperature gradient'
+    elif name.startswith('wind_gradient'):
+        return 'wind gradient'
+    elif name.startswith("u*_"):
+        return 'shear velocity'
+    elif name.startswith("L_"):
+        return 'Obukhov length'
     
 
         
@@ -536,7 +567,13 @@ def get_tidy_dataset(ds, variable_names):
         ds (_type_): Dataset to convert
         variable_names (_type_): Variable names that you want operated on. Variables may not be supported.
     """
-    tidy_df = ds[variable_names].to_dataframe().reset_index().melt(id_vars='time', value_vars=variable_names)
+    if type(ds) == xr.Dataset:
+        tidy_df = ds[variable_names].to_dataframe().reset_index().melt(id_vars='time', value_vars=variable_names)
+    elif type(ds) == pd.DataFrame:
+        tidy_df = ds[variable_names + ['time']].melt(id_vars='time', value_vars=variable_names)
+    else:
+        raise ValueError("wrong ds type")
+
     tidy_df['height'] = tidy_df['variable'].apply(height_from_variable_name)
     tidy_df['tower'] = tidy_df['variable'].apply(tower_from_variable_name)
     tidy_df['measurement'] = tidy_df['variable'].apply(measurement_from_variable_name)
@@ -985,3 +1022,93 @@ def tidy_df_add_variable(tidy_df_original, variable_new, variable, measurement, 
     )
 
     return pd.concat([tidy_df_original, new_data_df])
+
+def calculate_wind_gradient_for_height(ds, calculation_height, tower, Z0 = 0.005):
+    """ 
+    These calculations are done by fitting log-linear curve to 3 points, the 3 measurements 
+    including and surrounding the measurement height of interest. This means we can only 
+    calculate wind gradient at 3, 5, 10, and 15 meters (on the central tower).
+
+    See Sun et al., 2011
+    
+    Z0 = 0.005 for snow surface from Lapo, Nijssen, and Lundquist, 2019
+    """
+    def _log_linear_fn(z, a, b):
+        return a*np.log(z/Z0) + b * (z/Z0)
+    def _fit_log_linear(values, heights):
+        if all([np.isfinite(v) for v in values]):
+            [a,b], _ = curve_fit(_log_linear_fn, heights, values)
+            return a,b
+        else:
+            return np.nan, np.nan
+    def _calculate_log_linear_gradient(a_u, b_u, a_v, b_v, height):
+        return np.sqrt(((a_u/height) + (b_u/Z0))**2 + ((a_v/height) + (b_v/Z0))**2)
+
+    # identify two heights on either side of this height 
+    if tower == 'c':
+        calculation_height_to_fit_heights = {
+            3: [2, 3, 5],
+            5: [3, 5, 10],
+            10: [5, 10, 15],
+            15: [10, 15, 20],
+        }
+    else:
+        calculation_height_to_fit_heights = {
+            3: [1, 3, 10],
+        }
+
+    
+    heights = calculation_height_to_fit_heights[calculation_height]
+    u_variables = [f'u_{h}m_{tower}' for h in heights]
+    v_variables = [f'v_{h}m_{tower}' for h in heights]
+
+    # create_datasets for u and v data 
+    u_ds = ds[u_variables].to_dataframe().rename(columns=dict(zip(u_variables, heights)))
+    v_ds = ds[v_variables].to_dataframe().rename(columns=dict(zip(v_variables, heights)))
+    # calculate fitted loglinear parameters
+    u_ds['params'] = u_ds.apply(lambda row: _fit_log_linear(
+        [row[h] for h in heights],
+        heights
+    ), axis = 1)
+    v_ds['params'] = v_ds.apply(lambda row: _fit_log_linear(
+        [row[h] for h in heights],
+        heights
+    ), axis = 1)
+    u_ds['a_u'] = u_ds['params'].apply(lambda tup: tup[0])
+    u_ds['b_u'] = u_ds['params'].apply(lambda tup: tup[1])
+    v_ds['a_v'] = v_ds['params'].apply(lambda tup: tup[0])
+    v_ds['b_v'] = v_ds['params'].apply(lambda tup: tup[1])
+    # merged_parameters = u_ds[['a_u', 'b_u']].merge(v_ds[['a_v', 'b_v']], on='time')
+    merged_parameters = u_ds[['a_u', 'b_u']].join(v_ds[['a_v', 'b_v']]).reset_index().drop_duplicates()
+    gradient = merged_parameters.apply(
+        lambda row: _calculate_log_linear_gradient(row['a_u'], row['b_u'], row['a_v'], row['b_v'], calculation_height),
+        axis=1
+    )
+    return gradient
+
+def  calculate_temperature_gradient_for_height(ds, calculation_height, tower):
+    """These calculations are done with a simple central differencing method using 3 measurements, 
+    those including and surrounding the measurement height of interest. This means we can calculate 
+    temperature gradient at 1-meter intervals between 2 and 19 meters (on the central tower).
+
+    See Sun et al., 2011
+        
+    Args:
+        ds (_type_): _description_
+        calculation_height (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    assert (calculation_height > 1)
+    assert (calculation_height < 20)
+    [height_below, height_above] = [calculation_height - 1, calculation_height + 1]
+    temp_diff = ds[f'Tpotvirtual_{height_above}m_{tower}'] - ds[f'Tpotvirtual_{height_below}m_{tower}']
+    height_diff = height_above - height_below
+    gradient = temp_diff / height_diff
+    return gradient
+
+def calculate_richardson_number(ds, height, tower):
+    multiplier = metpy.constants.g.magnitude / (ds[f'Tvirtual_{height}m_c'] * units.celsius).pint.to(units.kelvin)
+    Ri = multiplier * ds[f'temp_gradient_{height}m_{tower}'] / ds[f'wind_gradient_{height}m_{tower}']
+    return Ri.pint.magnitude
