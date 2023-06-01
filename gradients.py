@@ -349,6 +349,12 @@ class Ri:
             height,
             tower
     ):
+        """
+        From:
+            Grachev, A. A., Fairall, C. W., Persson, P. O. G., Andreas, E. L. & Guest, P. S. 
+            Stable Boundary-Layer Scaling Regimes: The Sheba Data. 
+            Boundary-Layer Meteorol 116, 201–235 (2005).
+        """
         pot_virt_temperature_at_height = ds[f'Tpotvirtual_{height}m_{tower}']
         pot_temperature_at_height = ds[f'Tpot_{height}m_{tower}']
         pot_temperature_at_surface = ds[f'Tsurfpot_rad_{tower}']
