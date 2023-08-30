@@ -559,9 +559,9 @@ def get_turbpy_schemes():
                 #    'Louis (Ri capped, MJ98)',
                 'MO_HdB', #Holtslag/de Bruin',
                 #    'MO (Holtslag/de Bruin - capped)',
-                # 'MO (Beljaars/Holtslag)',
-                #    'MO (Webb - NoahMP)',
-                # 'MO (Cheng/Brutsaert)',
+                'MO (Beljaars/Holtslag)',
+                   'MO (Webb - NoahMP)',
+                'MO (Cheng/Brutsaert)',
                 )
 
     # A mapping between the titles and the stability methods used in each test.
@@ -571,18 +571,18 @@ def get_turbpy_schemes():
                     # 'Louis (Ri capped, MJ98)': 'louis',
                     'MO_HdB': 'monin_obukhov',
                     # 'MO (Holtslag/de Bruin - capped)': 'monin_obukhov',
-                    # 'MO (Beljaars/Holtslag)': 'monin_obukhov',
-                    # 'MO (Webb - NoahMP)': 'monin_obukhov',
-                    # 'MO (Cheng/Brutsaert)': 'monin_obukhov',
+                    'MO (Beljaars/Holtslag)': 'monin_obukhov',
+                    'MO (Webb - NoahMP)': 'monin_obukhov',
+                    'MO (Cheng/Brutsaert)': 'monin_obukhov',
                 }
 
     # Thes gradient functions for the Monin-Obukhov methods
     gradient_funcs = {'MO_HdB': 'holtslag_debruin',
                     #   'MO (Holtslag/de Bruin - capped)': 'holtslag_debruin',
-                    # 'MO (Beljaars/Holtslag)': 'beljaar_holtslag',
+                    'MO (Beljaars/Holtslag)': 'beljaar_holtslag',
                     #   'MO (Beljaars/Holtslag - capped)': 'beljaar_holtslag',
-                    # 'MO (Cheng/Brutsaert)': 'cheng_brutsaert',
-                    #   'MO (Webb - NoahMP)': 'webb_noahmp',
+                      'MO (Webb - NoahMP)': 'webb_noahmp',
+                      'MO (Cheng/Brutsaert)': 'cheng_brutsaert',
                     }
 
     # Parameters for the Louis scheme. Any method without a parameter value provided 
