@@ -647,8 +647,8 @@ class MOSTMulti():
             (wind_speed_2 - wind_speed_1) * VON_KARMAN_CONSTANT
         ) / (
             np.log(
-                (measurement_height_above_snow_surface_windspeed_2 / obukhov_length) 
-                / (measurement_height_above_snow_surface_windspeed_1 / obukhov_length)
+                (measurement_height_above_snow_surface_windspeed_2) 
+                / (measurement_height_above_snow_surface_windspeed_1)
             ) - stability_2 + stability_1
         )
 
@@ -675,8 +675,8 @@ class MOSTMulti():
             VON_KARMAN_CONSTANT*friction_velocity*air_density*AIR_SPECIFIC_HEAT
         ) / (
             np.log(
-                (measurement_height_above_snow_surface_temperature_2 / obukhov_length) 
-                / (measurement_height_above_snow_surface_temperature_1 / obukhov_length)
+                (measurement_height_above_snow_surface_temperature_2) 
+                / (measurement_height_above_snow_surface_temperature_1)
             ) - stability_2 + stability_1
         )
 
@@ -703,7 +703,7 @@ class MOSTMulti():
             VON_KARMAN_CONSTANT*friction_velocity*air_density
         ) / (
             np.log(
-                (measurement_height_above_snow_surface_specific_humidity_2 / obukhov_length) 
-                / (measurement_height_above_snow_surface_specific_humidity_1 / obukhov_length)
+                (measurement_height_above_snow_surface_specific_humidity_2) 
+                / (measurement_height_above_snow_surface_specific_humidity_1)
             ) - stability_2 + stability_1
         )
