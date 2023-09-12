@@ -553,43 +553,47 @@ def apogee2temp(ds,tower):
 def get_turbpy_schemes():
     # stab_titles are the names given to each stability scheme when plotting. In this example they correspond 
     # to the dictionaries that contain the parameter values for each run. T
-    stab_titles = ('Standard',
+    stab_titles = (
+                # 'Standard',
                 #    'Louis (b = 4.7)',
                 #    'Louis (b = 12)',
                 #    'Louis (Ri capped, MJ98)',
                 'MO_HdB', #Holtslag/de Bruin',
                 #    'MO (Holtslag/de Bruin - capped)',
-                'MO (Beljaars/Holtslag)',
+                # 'MO (Beljaars/Holtslag)',
                    'MO (Webb - NoahMP)',
-                'MO (Cheng/Brutsaert)',
+                # 'MO (Cheng/Brutsaert)',
                 )
 
     # A mapping between the titles and the stability methods used in each test.
-    stab_methods = {'Standard': 'standard',
+    stab_methods = {
+                    # 'Standard': 'standard',
                     # 'Louis (b = 4.7)': 'louis',
                     # 'Louis (b = 12)': 'louis',
                     # 'Louis (Ri capped, MJ98)': 'louis',
                     'MO_HdB': 'monin_obukhov',
                     # 'MO (Holtslag/de Bruin - capped)': 'monin_obukhov',
-                    'MO (Beljaars/Holtslag)': 'monin_obukhov',
+                    # 'MO (Beljaars/Holtslag)': 'monin_obukhov',
                     'MO (Webb - NoahMP)': 'monin_obukhov',
-                    'MO (Cheng/Brutsaert)': 'monin_obukhov',
+                    # 'MO (Cheng/Brutsaert)': 'monin_obukhov',
                 }
 
     # Thes gradient functions for the Monin-Obukhov methods
-    gradient_funcs = {'MO_HdB': 'holtslag_debruin',
+    gradient_funcs = {
+                'MO_HdB': 'holtslag_debruin',
                     #   'MO (Holtslag/de Bruin - capped)': 'holtslag_debruin',
-                    'MO (Beljaars/Holtslag)': 'beljaar_holtslag',
+                    # 'MO (Beljaars/Holtslag)': 'beljaar_holtslag',
                     #   'MO (Beljaars/Holtslag - capped)': 'beljaar_holtslag',
                       'MO (Webb - NoahMP)': 'webb_noahmp',
-                      'MO (Cheng/Brutsaert)': 'cheng_brutsaert',
+                    #   'MO (Cheng/Brutsaert)': 'cheng_brutsaert',
                     }
 
     # Parameters for the Louis scheme. Any method without a parameter value provided 
     # is filled in with the default value
     params = {'Louis (b = 4.7)': 9.4,
             'Louis (Ri capped, MJ98)': 9.4,
-            'Louis (b = 12)': 24.}
+            'Louis (b = 12)': 24.
+            }
 
     # Indicates which methods have capping of the conductance. Any method without capping 
     # indicated is assumed to have no capping.
