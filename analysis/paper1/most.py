@@ -15,7 +15,6 @@ import numpy as np
 
 VON_KARMAN_CONSTANT = 0.40 #dimensionless
 GRAVITY = 9.81 # m/s^2
-SNOW_SURFACE_ROUGHNESS = 1e-4 # m, Marks and Dozier report its in the range [1e-4, 5e-3]
 
 # Should this just be 0 for us?
 # Recommended equation
@@ -215,16 +214,20 @@ class MOST:
     _stability_function = None
     _stability_function_heat = None
     _stability_function_watervapor = None
+    _snow_surface_roughness = None
 
     MAX_ITERATIONS = 50
 
     def __init__(
         self,
-        stab_class: StabilityFunction
+        stab_class: StabilityFunction,
+        snow_surface_roughness: float = 1e-4 # m, Marks and Dozier report its in the range [1e-4, 5e-3]
     ):
         self._stability_function = stab_class.mass
         self._stability_function_heat = stab_class.heat
         self._stability_function_watervapor = stab_class.watervapor
+        self._snow_surface_roughness = snow_surface_roughness
+
 
     def solve(
             self,
@@ -385,7 +388,7 @@ class MOST:
             wind_speed * VON_KARMAN_CONSTANT
         ) / (
             np.log(
-                (measurement_height_above_snow_surface_windspeed - ZERO_PLANE_DISPLACEMENT_HEIGHT) / SNOW_SURFACE_ROUGHNESS
+                (measurement_height_above_snow_surface_windspeed - ZERO_PLANE_DISPLACEMENT_HEIGHT) / self._snow_surface_roughness
             )
             -
             stability
@@ -411,7 +414,7 @@ class MOST:
             VON_KARMAN_CONSTANT*friction_velocity*air_density*AIR_SPECIFIC_HEAT
         ) / (
             np.log(
-                (measurement_height_above_snow_surface_temperature - ZERO_PLANE_DISPLACEMENT_HEIGHT) / SNOW_SURFACE_ROUGHNESS
+                (measurement_height_above_snow_surface_temperature - ZERO_PLANE_DISPLACEMENT_HEIGHT) / self._snow_surface_roughness
             )
             -
             stability
@@ -437,7 +440,7 @@ class MOST:
             VON_KARMAN_CONSTANT*friction_velocity*air_density
         ) / (
             np.log(
-                (measurement_height_above_snow_surface_specific_humidity - ZERO_PLANE_DISPLACEMENT_HEIGHT) / SNOW_SURFACE_ROUGHNESS
+                (measurement_height_above_snow_surface_specific_humidity - ZERO_PLANE_DISPLACEMENT_HEIGHT) / self._snow_surface_roughness
             )
             -
             stability

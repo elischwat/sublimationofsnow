@@ -322,8 +322,6 @@ if __name__ == '__main__':
         delayed(run_turbpy)(config) for config in config_list_tqdm
     )
 
-    # pickle.dump( processed_results, open( "processed_results.p", "wb" ) )
-
     df = pd.DataFrame()
     for result in processed_results:
         model_run_name, latent_heat, sensible_heat, zeta = result
