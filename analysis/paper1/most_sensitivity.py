@@ -51,6 +51,8 @@ VARIABLES = [
     ## Input Variables for Turbpy
     'Tsurf_c',
     'Tsurf_d',
+    # 'Tsurf_uw',
+    # 'Tsurf_ue',
     'Tsurf_rad_d',
     'P_10m_c',
     ## Input variables for calculating dewpoint temperature
@@ -94,6 +96,8 @@ variables_df['Td_3m_c'] = variables_df['vaporpressure_3m_c'].apply(lambda x: met
 variables_df['Td_3m_c'] = (variables_df['Td_3m_c'].values * units("celsius")).to("kelvin").magnitude
 variables_df['Tsurf_c'] = (variables_df['Tsurf_c'].values * units("celsius")).to("kelvin").magnitude
 variables_df['Tsurf_d'] = (variables_df['Tsurf_d'].values * units("celsius")).to("kelvin").magnitude
+# variables_df['Tsurf_uw'] = (variables_df['Tsurf_uw'].values * units("celsius")).to("kelvin").magnitude
+# variables_df['Tsurf_ue'] = (variables_df['Tsurf_ue'].values * units("celsius")).to("kelvin").magnitude
 variables_df['Tsurf_rad_d'] = (variables_df['Tsurf_rad_d'].values * units("celsius")).to("kelvin").magnitude
 variables_df['T_3m_c'] = (variables_df['T_3m_c'].values * units("celsius")).to("kelvin").magnitude
 
@@ -146,7 +150,7 @@ def run_turbpy(inputs):
     for n, (tair, vpair, tsfc, vpsfc, u, airP, snDep) in enumerate(zip(
         airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure, snowDepth
     )):
-        if any(np.isnan([tair, vpair, tsfc, vpsfc, u, airP])):
+        if any(np.isnan([tair, vpair, tsfc, vpsfc, u, airP, snDep])):
             stability_correction[model_run_name][n] = np.nan
             conductance_sensible[model_run_name][n] = np.nan
             conductance_latent[model_run_name][n] = np.nan
@@ -154,26 +158,36 @@ def run_turbpy(inputs):
             latent_heat[model_run_name][n] = np.nan
             zeta[model_run_name][n] = np.nan
         else:
-            (
-                conductance_sensible[model_run_name][n], 
-                conductance_latent[model_run_name][n], 
-                sensible_heat[model_run_name][n],
-                latent_heat[model_run_name][n],
-                stab_output,
-                p_test
-            ) = turbpy.turbFluxes(tair, airP,
-                                                    vpair, u, tsfc,
-                                                     vpsfc, snDep,
-                                                    height, param_dict=scheme_dict[scheme_name],
-                                                    z0Ground=z0, groundSnowFraction=1)
-            # Get the Zeta value from the stability parameters dictionary
-            if scheme_dict[scheme_name]['stability_method'] != 'monin_obukhov':
-                stability_correction[model_run_name][n] = stab_output['stabilityCorrection']
-                # SHOULD I JUST BE ASSIGNING NAN HERE?
-                zeta[model_run_name][n] = np.nan
-            else:
+            try:
+                (
+                    conductance_sensible[model_run_name][n], 
+                    conductance_latent[model_run_name][n], 
+                    sensible_heat[model_run_name][n],
+                    latent_heat[model_run_name][n],
+                    stab_output,
+                    p_test
+                ) = turbpy.turbFluxes(tair, airP,
+                                                        vpair, u, tsfc,
+                                                        vpsfc, snDep,
+                                                        height, param_dict=scheme_dict[scheme_name],
+                                                        z0Ground=z0, groundSnowFraction=1)
+                # Get the Zeta value from the stability parameters dictionary
+                if scheme_dict[scheme_name]['stability_method'] != 'monin_obukhov':
+                    stability_correction[model_run_name][n] = stab_output['stabilityCorrection']
+                    # SHOULD I JUST BE ASSIGNING NAN HERE?
+                    zeta[model_run_name][n] = np.nan
+                else:
+                    stability_correction[model_run_name][n] = np.nan
+                    zeta[model_run_name][n] = stab_output['zeta']
+            except Exception as exc:
+                print(f"Cought error running turbpy.turbFluxes...{exc}")
                 stability_correction[model_run_name][n] = np.nan
-                zeta[model_run_name][n] = stab_output['zeta']
+                conductance_sensible[model_run_name][n] = np.nan
+                conductance_latent[model_run_name][n] = np.nan
+                sensible_heat[model_run_name][n] = np.nan
+                latent_heat[model_run_name][n] = np.nan
+                zeta[model_run_name][n] = np.nan
+                
 
     return model_run_name, latent_heat, sensible_heat, zeta
 
@@ -283,10 +297,9 @@ if __name__ == '__main__':
     surface_temp_options = [
         'Tsurf_c',
         'Tsurf_d',
-        'Tsurf_uw',
-        'Tsurf_ue',
-        'Tsurf_rad_d',
-        'Td_3m_c'
+        # 'Tsurf_uw',
+        # 'Tsurf_ue',
+        'Tsurf_rad_d'
     ]
 
     e_sat_curve_options = {
