@@ -67,6 +67,7 @@ VARIABLES = [
     'w_h2o__3m_c',
     'u*_3m_c',
     'Ri_3m_c',
+    'SnowDepth_d',
 ]
 
 # CREATE WIDE DATAFRAME
@@ -102,19 +103,14 @@ variables_df['specifichumidity_3m_c'] = metpy.calc.specific_humidity_from_mixing
 ).pint.to('g/kg').values
 
 # Create measurement height variables
-variables_df['measurement_height'] = 3
-
 height = 3
-snowDepth = 0
-fillna_method='ffill'
 
+snowDepth = variables_df['SnowDepth_d']
 airTemp = variables_df['T_3m_c']
 windspd = variables_df['spd_3m_c']
 airPressure = (variables_df['P_10m_c'].values * units.millibar).to(units.pascal).magnitude
-
 # the turbpy.vapPress function requires specific humidity in units of g/g
 specific_humidity = xr.DataArray(variables_df['specifichumidity_3m_c'])*units('g/kg').to('g/g').magnitude
-
 airVaporPress = turbpy.vapPress(
     specific_humidity,
     airPressure
@@ -147,8 +143,8 @@ def run_turbpy(inputs):
     latent_heat[model_run_name] = np.zeros_like(sfcTemp)
     zeta[model_run_name] = np.zeros_like(sfcTemp)
 
-    for n, (tair, vpair, tsfc, vpsfc, u, airP) in enumerate(zip(
-        airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure
+    for n, (tair, vpair, tsfc, vpsfc, u, airP, snDep) in enumerate(zip(
+        airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure, snowDepth
     )):
         if any(np.isnan([tair, vpair, tsfc, vpsfc, u, airP])):
             stability_correction[model_run_name][n] = np.nan
@@ -167,7 +163,7 @@ def run_turbpy(inputs):
                 p_test
             ) = turbpy.turbFluxes(tair, airP,
                                                     vpair, u, tsfc,
-                                                    vpsfc, snowDepth,
+                                                     vpsfc, snDep,
                                                     height, param_dict=scheme_dict[scheme_name],
                                                     z0Ground=z0, groundSnowFraction=1)
             # Get the Zeta value from the stability parameters dictionary
@@ -287,6 +283,8 @@ if __name__ == '__main__':
     surface_temp_options = [
         'Tsurf_c',
         'Tsurf_d',
+        'Tsurf_uw',
+        'Tsurf_ue',
         'Tsurf_rad_d',
         'Td_3m_c'
     ]
