@@ -189,12 +189,12 @@ def run_turbpy(inputs):
                 zeta[model_run_name][n] = np.nan
                 
 
-    return model_run_name, latent_heat, sensible_heat, zeta
+    return model_run_name, latent_heat, sensible_heat, zeta, conductance_sensible, conductance_latent
 
 
 if __name__ == '__main__':
 
-    SNOW_SURFACE_ROUGHNESS_VALUES = [0.0001, 0.0005, 0.001, 0.005]
+    SNOW_SURFACE_ROUGHNESS_VALUES = [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005]
 
     scheme_dict = {
         ################################################
@@ -335,13 +335,15 @@ if __name__ == '__main__':
 
     df = pd.DataFrame()
     for result in processed_results:
-        model_run_name, latent_heat, sensible_heat, zeta = result
+        model_run_name, latent_heat, sensible_heat, zeta, conductance_sensible, conductance_latent = result
         new_df = pd.DataFrame({
                     'time': variables_df.time.values,
                     'config': np.full(len(latent_heat[model_run_name]), model_run_name),
                     'latent heat flux': latent_heat[model_run_name],
                     'sensible heat flux': sensible_heat[model_run_name],
-                    'zeta': zeta[model_run_name]
+                    'zeta': zeta[model_run_name],
+                    'latent heat conductance': conductance_latent[model_run_name],
+                    'sensible heat conductance': conductance_sensible[model_run_name],
                 })
         # convert from W/m^2 to g/m^2/s
         new_df['latent heat flux'] = - new_df['latent heat flux']/2838
