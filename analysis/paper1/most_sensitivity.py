@@ -89,11 +89,8 @@ variables_df['vaporpressure_3m_c'] = variables_df.apply(
     ).to(units("pascals")
 ).magnitude, axis=1)
 
-variables_df['Td_3m_c'] = variables_df['vaporpressure_3m_c'].apply(lambda x: metpy.calc.dewpoint(x*units("Pa")).magnitude)
-
 # MAKE CONVERSIONS
 # convert from ˚C to K
-variables_df['Td_3m_c'] = (variables_df['Td_3m_c'].values * units("celsius")).to("kelvin").magnitude
 variables_df['Tsurf_c'] = (variables_df['Tsurf_c'].values * units("celsius")).to("kelvin").magnitude
 variables_df['Tsurf_d'] = (variables_df['Tsurf_d'].values * units("celsius")).to("kelvin").magnitude
 # variables_df['Tsurf_uw'] = (variables_df['Tsurf_uw'].values * units("celsius")).to("kelvin").magnitude
