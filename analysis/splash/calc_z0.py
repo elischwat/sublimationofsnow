@@ -21,11 +21,40 @@ def calc_z0(z, Cd, zL):
     smp = 2*np.log((1+x)/2) + np.log((1+x**2)/2) - 2*np.arctan(x)+np.pi/2
 
     # select amongst smp and sma depending on stability. just approx using thermodynamic temp
-    sm = sma; 
+    sm = sma
     ii = np.argwhere(zL < 0)
     sm[ii] = smp[ii]
 
-    # Andreas et al. (2010) eq 3.5
-    z0 = z * np.exp(-(k*Cd**-0.5 + sm*(z/L)))
-    
+    # Andreas et al. (2010) eq 3.5a
+    z0 = z * np.exp(-(k*Cd**-0.5 + sm))
+    return z0
+
+def calc_z0T(z, Cd, Ch, zL):
+    k = 0.4
+    L = z / zL
+
+    sma = 1 + (6.5 * zL * (1+zL)**(1/3)) / (1.3 + zL); # Psi 
+    x = np.real((1 - 16*zL)**(0.25)) # assumes gamma = 16
+    smp = 2*np.log((1+x)/2) + np.log((1+x**2)/2) - 2*np.arctan(x)+np.pi/2
+    sm = sma
+    ii = np.argwhere(zL < 0)
+    sm[ii] = smp[ii]
+
+    # Andreas et al. (2010) eq 3.5b
+    z0 = z * np.exp(-(k*(Cd**0.5)*(Ch**-1) + sm))
+    return z0
+
+def calc_z0Q(z, Cd, Ce, zL):
+    k = 0.4
+    L = z / zL
+
+    sma = 1 + (6.5 * zL * (1+zL)**(1/3)) / (1.3 + zL); # Psi 
+    x = np.real((1 - 16*zL)**(0.25)) # assumes gamma = 16
+    smp = 2*np.log((1+x)/2) + np.log((1+x**2)/2) - 2*np.arctan(x)+np.pi/2
+    sm = sma
+    ii = np.argwhere(zL < 0)
+    sm[ii] = smp[ii]
+
+    # Andreas et al. (2010) eq 3.5b
+    z0 = z * np.exp(-(k*(Cd**0.5)*(Ce**-1) + sm))
     return z0

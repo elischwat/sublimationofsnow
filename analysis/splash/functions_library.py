@@ -1706,7 +1706,7 @@ def dstr(date):
     return date.strftime("%Y-%m-%d")
 
 # Bulk fluxes
-def cor_ice_A10(bulk_input,le_flag,snow_flag,sta):
+def cor_ice_A10(bulk_input,le_flag,snow_flag,sta, snow_z0=None):
 # ############################################################################################
 # AUTHORS:
 #
@@ -1871,9 +1871,19 @@ def cor_ice_A10(bulk_input,le_flag,snow_flag,sta):
         Qs=es*622/(P-.378*es)/1000 # Specific humidity (Bolton, 1980)    
         dq=Qs-Q
         if sta == 'asfs30':
-            zogs=2.3e-4 # Andreas et al. winter snow
+            if snow_z0:
+                zogs = snow_z0
+            else:
+                # ELI CHANGED THIS to 1e-4
+                zogs=1e-4 # Andreas et al. winter snow
+                # zogs=2.3e-4 # Andreas et al. winter snow
         elif sta == 'asfs50':
-            zogs=2.3e-4 # Andreas et al. winter snow
+            if snow_z0:
+                zogs = snow_z0
+            else:
+                # ELI CHANGED THIS to 1e-4
+                zogs=1e-4 # Andreas et al. winter snow
+                # zogs=2.3e-4 # Andreas et al. winter snow
     elif snow_flag == 0: # snow free   
         es=6.112*math.exp(17.502*ts/(ts+241.0))*(1.0007+3.46e-6*P) # saturation vapor pressure
         Qs=es*622/(P-.378*es)/1000 # Specific humidity (Bolton, 1980)  
@@ -1933,6 +1943,7 @@ def cor_ice_A10(bulk_input,le_flag,snow_flag,sta):
     tsr=-(dt-dter)*von*fdg/(math.log(zt/zot10)-psih_sheba(zt/L10))
     qsr=-(dq-wetc*dter)*von*fdg/(math.log(zq/zot10)-psih_sheba(zq/L10))
   
+    # NOTE that these do NOT change depending on the input snow_z0 parameter
     zot=1e-4
     zoq=1e-4 # approximate values found by Andreas et al. (2004)  		    
     
