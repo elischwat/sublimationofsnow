@@ -18,3 +18,11 @@ analysis/xprecip/**
 **sosnoqc**
 
 **altair-data-**.json
+**.svg
+**.csv
+**.parquet
+**.nc
+**.png
+**.cdf
+**.log
+**.html
