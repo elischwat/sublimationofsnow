@@ -21,17 +21,15 @@ import turbpy
 # * use `cumulative_sublimation.ipynb` to create daily dataset
 # * use `analysis/sos/create_turbulence_dataset.ipynb` to create SoS tidy dataset and the (disdrometer) precip data
 
+# paseed to Parallel as the n_jobs parameter
+PARALLELISM = 20
+
 # Inputs
 start_date = '20221130'
 end_date = '20230509'
-met_gothic = 'gucmetM1.b1'
-tsi_sail_code = 'guctsiskycoverM1.b1'
-data_dir = '/data2/elilouis/sublimationofsnow'
-username = os.getenv("ARM_USERNAME")
-token = os.getenv("ARM_TOKEN")
 
 # # Open Data 
-tidy_df_30Min = pd.read_parquet(f"../sos/tidy_df_30Min_{start_date}_{end_date}_noplanar_fit.parquet")
+tidy_df_30Min = pd.read_parquet(f"tidy_df_30min_{start_date}_{end_date}_noplanar_fit_clean.parquet")
 tidy_df_30Min['time'] = pd.to_datetime(tidy_df_30Min['time'])
 
 # returns in Pascals
@@ -41,6 +39,20 @@ def e_sat_metpy(temp_in_c):
 def e_sat_alduchov(temp_in_c):
     millibars = 6.1168*np.exp(22.587*temp_in_c / (273.86 + temp_in_c))
     return millibars*100
+
+z0_variable_names = [
+    'z0_andreas',
+    'z0_andreas_weekly',
+    'z0_windprofile_weekly',
+]
+z0_values_constant = [
+    0.00001,
+    0.00005,    
+    0.0001, 
+    0.0005, 
+    0.001,  
+    0.005,  
+]
 
 # EXTRACT VARIABLES
 VARIABLES = [
@@ -66,7 +78,7 @@ VARIABLES = [
     'u*_3m_c',
     'Ri_3m_c',
     'SnowDepth_d',
-]
+] + z0_variable_names
 
 # CREATE WIDE DATAFRAME
 variables_df = tidy_df_30Min[tidy_df_30Min.variable.isin(VARIABLES)].pivot_table(
@@ -114,14 +126,21 @@ airVaporPress = turbpy.vapPress(
 
 
 def run_turbpy(inputs):
-    z0, scheme_name, surface_temp_variable, e_sat_curve_func_name = inputs
+    z0_var_name, scheme_name, surface_temp_variable, e_sat_curve_func_name = inputs
 
     e_sat_curve_func = e_sat_curve_options[e_sat_curve_func_name]
 
     sfcTemp = variables_df[surface_temp_variable]
     sfcVaporPress = e_sat_curve_func(sfcTemp - 273.15)
 
-    model_run_name = f"{str(scheme_name)} {str(surface_temp_variable)} {str(e_sat_curve_func.__name__)} {str(z0)}"
+    if z0_var_name in z0_values_constant:
+        z0_values_local = np.full(sfcTemp.shape, z0_var_name)
+    elif z0_var_name in z0_variable_names:
+        z0_values_local = variables_df[z0_var_name]
+    else:
+        raise ValueError(f"z0_var_name provided invalid: {z0_var_name}")
+
+    model_run_name = f"{str(scheme_name)} {str(surface_temp_variable)} {str(e_sat_curve_func.__name__)} {str(z0_var_name)}"
 
     stability_correction[model_run_name] = np.zeros_like(sfcTemp)
     conductance_sensible[model_run_name] = np.zeros_like(sfcTemp)
@@ -130,8 +149,8 @@ def run_turbpy(inputs):
     latent_heat[model_run_name] = np.zeros_like(sfcTemp)
     zeta[model_run_name] = np.zeros_like(sfcTemp)
 
-    for n, (tair, vpair, tsfc, vpsfc, u, airP, snDep) in enumerate(zip(
-        airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure, snowDepth
+    for n, (tair, vpair, tsfc, vpsfc, u, airP, snDep, z0) in enumerate(zip(
+        airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure, snowDepth, z0_values_local
     )):
         if any(np.isnan([tair, vpair, tsfc, vpsfc, u, airP, snDep])):
             stability_correction[model_run_name][n] = np.nan
@@ -176,8 +195,7 @@ def run_turbpy(inputs):
 
 
 if __name__ == '__main__':
-    SNOW_SURFACE_ROUGHNESS_VALUES = [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, ]
-
+    SNOW_SURFACE_ROUGHNESS_VALUES = z0_variable_names + z0_values_constant
     scheme_dict = {
         ################################################
         ###### BULK AERODYNAMIC METHODS
@@ -185,26 +203,26 @@ if __name__ == '__main__':
         "Standard": {
                     "stability_method": "standard"
         },
-        "Louis b = 12": {
-                    "stability_method": "louis",
-                    "stability_params": {
-                        "louis": 24.0
-                    }
-        },
+        # "Louis b = 12": {
+        #             "stability_method": "louis",
+        #             "stability_params": {
+        #                 "louis": 24.0
+        #             }
+        # },
         ################################################
         ###### MOST METHODS USING YANG LENGTHS
         ################################################
         # I added this one to the Turbpy Code base to match my own solution
-        'MO Marks Dozier': {
-                    'stability_method': 'monin_obukhov',
-                    'monin_obukhov': {
-                        'gradient_function': 'marks_dozier',
-                        'roughness_function': 'yang_08'
-                    },
-                    'stability_params': {
-                        'marks_dozier': 5.2
-                    }
-        },
+        # 'MO Marks Dozier': {
+        #             'stability_method': 'monin_obukhov',
+        #             'monin_obukhov': {
+        #                 'gradient_function': 'marks_dozier',
+        #                 'roughness_function': 'yang_08'
+        #             },
+        #             'stability_params': {
+        #                 'marks_dozier': 5.2
+        #             }
+        # },
         'MO Holtslag de Bruin': {
                     'stability_method': 'monin_obukhov',
                     'monin_obukhov': {
@@ -236,16 +254,16 @@ if __name__ == '__main__':
         ################################################
         ###### THESE ARE ALL USING ANDREAS LENGTHS
         ################################################
-        'MO Marks Dozier andreas lengths': {
-                    'stability_method': 'monin_obukhov',
-                    'monin_obukhov': {
-                        'gradient_function': 'marks_dozier',
-                        'roughness_function': 'andreas'
-                    },
-                    'stability_params': {
-                        'marks_dozier': 5.2
-                    }
-        },
+        # 'MO Marks Dozier andreas lengths': {
+        #             'stability_method': 'monin_obukhov',
+        #             'monin_obukhov': {
+        #                 'gradient_function': 'marks_dozier',
+        #                 'roughness_function': 'andreas'
+        #             },
+        #             'stability_params': {
+        #                 'marks_dozier': 5.2
+        #             }
+        # },
         'MO Holtslag de Bruin andreas lengths': {
                     'stability_method': 'monin_obukhov',
                     'monin_obukhov': {
@@ -285,7 +303,7 @@ if __name__ == '__main__':
     ]
 
     e_sat_curve_options = {
-        'e_sat_metpy': e_sat_metpy,
+        # 'e_sat_metpy': e_sat_metpy,
         'e_sat_alduchov': e_sat_alduchov
     }
 
@@ -311,10 +329,10 @@ if __name__ == '__main__':
 
     config_list_tqdm = tqdm(config_list)
 
-    processed_results =  Parallel(n_jobs = 64)(
+    processed_results =  Parallel(n_jobs = PARALLELISM)(
         delayed(run_turbpy)(config) for config in config_list_tqdm
     )
-
+    
     df = pd.DataFrame()
     for result in processed_results:
         model_run_name, latent_heat, sensible_heat, zeta, conductance_sensible, conductance_latent = result
@@ -334,4 +352,4 @@ if __name__ == '__main__':
         new_df[f'sensible heat flux'] = (new_df[f'sensible heat flux']/(variables_df['airdensity_3m_c']*0.718*1000))
         df = pd.concat([df, new_df])
 
-    df.to_parquet("model_results.parquet")
+    df.to_parquet("model_results_test.parquet")

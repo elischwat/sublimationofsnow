@@ -1942,10 +1942,51 @@ def cor_ice_A10(bulk_input,le_flag,snow_flag,sta, snow_z0=None):
     usr=ut*von/(math.log(zu/zo10)-psim_sheba(zu/L10))
     tsr=-(dt-dter)*von*fdg/(math.log(zt/zot10)-psih_sheba(zt/L10))
     qsr=-(dq-wetc*dter)*von*fdg/(math.log(zq/zot10)-psih_sheba(zq/L10))
-  
+
     # NOTE that these do NOT change depending on the input snow_z0 parameter
-    zot=1e-4
-    zoq=1e-4 # approximate values found by Andreas et al. (2004)  		    
+    # zot=1e-4
+    # zoq=1e-4 # approximate values found by Andreas et al. (2004)  		    
+
+    ################################################################################################
+    # This function and the assignment below it replace the constant values for zot and zoq that
+    # were used when I got this code from chris.
+    ################################################################################################
+    ################################################################################################
+    def andreas(ustar, z0Ground, airTemp):
+        #    SUPPLY AIR TEMP IN Kelvin
+        #      
+        #    Compute scaler roughness lengths using procedure
+        #    in Andreas, 1987, Boundary-Layer Meteorology 38, 159-184.  Only
+        #    use this procedure for snow (or bare soil)
+        #
+        #     Expression for kinematic viscosity of air is taken from program
+        #     of Launiainen and Vihma, 1990, Environmental Software, vol. 5,
+        #     No. 3, pp. 113 - 124.
+
+        # Heat
+        Reynolds = z0Ground * ustar * 1. * 10.**7. / (.9065 * airTemp - 112.7)
+        if Reynolds <= 0.135:                           # Smooth coefficients
+            b0 = 1.250; b1 = 0.; b2 = 0.; 
+        elif (Reynolds < 2.5) and (Reynolds > 0.135):   # Transition coefficients
+            b0 = 0.149; b1 = -0.550; b2 = 0.
+        else:                                           # Rough coefficients
+            b0 = 0.317; b1 = -0.565; b2 = -0.183
+        z0Groundh = (z0Ground* np.exp(b0 + b1 * np.log(Reynolds) + b2 * np.log(Reynolds)**2.))
+
+        # Moisture
+        if Reynolds <= 0.135:
+            b0 = 1.61; b1 = 0.; b2 = 0.
+        elif Reynolds < 2.5:
+            b0 = 0.351; b1 = -0.628; b2 = 0.
+        else:
+            b0 = 0.396; b1 = -0.512; b2 = -0.180
+        z0Groundq = (z0Ground * np.exp(b0 + b1 * np.log(Reynolds) + b2 * np.log(Reynolds)**2.))
+        return (z0Groundh, z0Groundq)
+    
+    zot, zoq = andreas(usr, snow_z0, t + 273.15)
+    print((zot, zoq))
+    ################################################################################################
+    ################################################################################################
     
     # Bulk Loop
     for i in range(nits): 
