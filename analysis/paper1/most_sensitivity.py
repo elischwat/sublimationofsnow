@@ -352,4 +352,4 @@ if __name__ == '__main__':
         new_df[f'sensible heat flux'] = (new_df[f'sensible heat flux']/(variables_df['airdensity_3m_c']*0.718*1000))
         df = pd.concat([df, new_df])
 
-    df.to_parquet("model_results_test.parquet")
+    df.to_parquet("model_results.parquet")
