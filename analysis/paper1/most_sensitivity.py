@@ -43,7 +43,7 @@ def e_sat_alduchov(temp_in_c):
 z0_variable_names = [
     'z0_andreas',
     'z0_andreas_weekly',
-    'z0_windprofile_weekly',
+    # 'z0_windprofile_weekly',
 ]
 z0_values_constant = [
     0.00001,
