@@ -1,9 +1,11 @@
+# %% [markdown]
 # In this notebook we run TurbPy and examine the sensivity of TurbPy's MOST solutions to:
 # 1. the saturation vapor pressure curve used to calculate surface water vapor pressure from surface temperature measurement
 # 2. choice of surface temperature measusrement (including estimating surface temperature as 2/3-meter surface temperature)
 #
 # See `sat_vapor_pressure_curve.ipynb`, the analysis which preceded this, and `create_turbulence_dataset.ipynb`, where we copied the code for running TurbPy.
 
+# %%
 import os
 import numpy as np
 import pandas as pd
@@ -14,24 +16,31 @@ import metpy.calc
 from metpy.units import units
 import pint_xarray
 import turbpy
+from dask.distributed import Client
+import dask.dataframe as dd
 
 
+# %% [markdown]
 # # Prerequisite files
 # * use script `analysis/sail/lidar_wind_profile_synoptic_wind_coherence.py` to download synoptic wind data
 # * use `cumulative_sublimation.ipynb` to create daily dataset
 # * use `analysis/sos/create_turbulence_dataset.ipynb` to create SoS tidy dataset and the (disdrometer) precip data
 
+# %%
 # paseed to Parallel as the n_jobs parameter
 PARALLELISM = 4
 
+# %%
 # Inputs
 start_date = '20221130'
 end_date = '20230509'
 
+# %%
 # # Open Data                     
 tidy_df = pd.read_parquet(f"tidy_df_{start_date}_{end_date}_noplanar_fit_clean.parquet")
 tidy_df['time'] = pd.to_datetime(tidy_df['time'])
 
+# %%
 # returns in Pascals
 def e_sat_metpy(temp_in_c):
     millibars = 6.112*np.exp(17.67*temp_in_c / (243.5 + temp_in_c))
@@ -40,6 +49,7 @@ def e_sat_alduchov(temp_in_c):
     millibars = 6.1168*np.exp(22.587*temp_in_c / (273.86 + temp_in_c))
     return millibars*100
 
+# %%
 z0_variable_names = [
     'z0_andreas',
     'z0_andreas_weekly',
@@ -54,6 +64,7 @@ z0_values_constant = [
     0.005,  
 ]
 
+# %%
 # EXTRACT VARIABLES
 VARIABLES = [
     ## Input Variables for Turbpy
@@ -80,6 +91,7 @@ VARIABLES = [
     'SnowDepth_d',
 ] + z0_variable_names
 
+# %%
 # CREATE WIDE DATAFRAME
 variables_df = tidy_df[tidy_df.variable.isin(VARIABLES)].pivot_table(
     values = 'value',
@@ -87,6 +99,7 @@ variables_df = tidy_df[tidy_df.variable.isin(VARIABLES)].pivot_table(
     columns='variable'
 ).reset_index()
 
+# %%
 # MAKE CONVERSIONS
 # convert from ˚C to K
 variables_df['Tsurf_c'] = (variables_df['Tsurf_c'].values * units("celsius")).to("kelvin").magnitude
@@ -96,14 +109,18 @@ variables_df['Tsurf_d'] = (variables_df['Tsurf_d'].values * units("celsius")).to
 variables_df['Tsurf_rad_d'] = (variables_df['Tsurf_rad_d'].values * units("celsius")).to("kelvin").magnitude
 variables_df['T_3m_c'] = (variables_df['T_3m_c'].values * units("celsius")).to("kelvin").magnitude
 
+# %%
 # Calculate specific humidity at 3m
 variables_df['specifichumidity_3m_c'] = metpy.calc.specific_humidity_from_mixing_ratio(
     xr.DataArray(variables_df['mixingratio_3m_c'])*units('g/g')
 ).pint.to('g/kg').values
 
+# %%
 # Create measurement height variables
-height = 3
+HEIGHT = 3
 
+# %%
+timestamps = variables_df.time.values
 snowDepth = variables_df['SnowDepth_d']
 airTemp = variables_df['T_3m_c']
 windspd = variables_df['spd_3m_c']
@@ -115,241 +132,266 @@ airVaporPress = turbpy.vapPress(
     airPressure
 )
 
+# %% [markdown]
+# # Organize all inputs into a dataset
 
+# %%
 
+SNOW_SURFACE_ROUGHNESS_VALUES = z0_variable_names + z0_values_constant
+scheme_dict = {
+    ################################################
+    ###### BULK AERODYNAMIC METHODS
+    ################################################
+    "Standard": {
+                "stability_method": "standard"
+    },
+    # "Louis b = 12": {
+    #             "stability_method": "louis",
+    #             "stability_params": {
+    #                 "louis": 24.0
+    #             }
+    # },
+    ################################################
+    ###### MOST METHODS USING YANG LENGTHS
+    ################################################
+    # I added this one to the Turbpy Code base to match my own solution
+    # 'MO Marks Dozier': {
+    #             'stability_method': 'monin_obukhov',
+    #             'monin_obukhov': {
+    #                 'gradient_function': 'marks_dozier',
+    #                 'roughness_function': 'yang_08'
+    #             },
+    #             'stability_params': {
+    #                 'marks_dozier': 5.2
+    #             }
+    # },
+    'MO Holtslag de Bruin': {
+                'stability_method': 'monin_obukhov',
+                'monin_obukhov': {
+                    'gradient_function': 'holtslag_debruin',
+                    'roughness_function': 'yang_08'
+                }
+    },
+    'MO Webb NoahMP': {
+                'stability_method': 'monin_obukhov',
+                'monin_obukhov': {
+                    'gradient_function': 'webb_noahmp',
+                    'roughness_function': 'yang_08'
+                },
+    },
+    "MO Beljaars Holtslag": {
+                "monin_obukhov": {
+                    "gradient_function": "beljaar_holtslag",
+                    'roughness_function': 'yang_08'
+                },
+                'stability_method': 'monin_obukhov'
+    },
+    "MO Cheng Brutsaert": {
+                "monin_obukhov": {
+                    "gradient_function": "cheng_brutsaert",
+                    'roughness_function': 'yang_08'
+                },
+                'stability_method': 'monin_obukhov'
+    },
+    ################################################
+    ###### THESE ARE ALL USING ANDREAS LENGTHS
+    ################################################
+    # 'MO Marks Dozier andreas lengths': {
+    #             'stability_method': 'monin_obukhov',
+    #             'monin_obukhov': {
+    #                 'gradient_function': 'marks_dozier',
+    #                 'roughness_function': 'andreas'
+    #             },
+    #             'stability_params': {
+    #                 'marks_dozier': 5.2
+    #             }
+    # },
+    'MO Holtslag de Bruin andreas lengths': {
+                'stability_method': 'monin_obukhov',
+                'monin_obukhov': {
+                    'gradient_function': 'holtslag_debruin',
+                    'roughness_function': 'andreas'
+                }
+    },
+    'MO Webb NoahMP andreas lengths': {
+                'stability_method': 'monin_obukhov',
+                'monin_obukhov': {
+                    'gradient_function': 'webb_noahmp',
+                    'roughness_function': 'andreas'
+                },
+    },
+    "MO Beljaars Holtslag andreas lengths": {
+                "monin_obukhov": {
+                    "gradient_function": "beljaar_holtslag",
+                    'roughness_function': 'andreas'
+                },
+                'stability_method': 'monin_obukhov'
+    },
+    "MO Cheng Brutsaert andreas lengths": {
+                "monin_obukhov": {
+                    "gradient_function": "cheng_brutsaert",
+                    'roughness_function': 'andreas'
+                },
+                'stability_method': 'monin_obukhov'
+    },
+}
 
+surface_temp_options = [
+    'Tsurf_c',
+    'Tsurf_d',
+    # 'Tsurf_uw',
+    # 'Tsurf_ue',
+    'Tsurf_rad_d'
+]
 
+e_sat_curve_options = {
+    # 'e_sat_metpy': e_sat_metpy,
+    'e_sat_alduchov': e_sat_alduchov
+}
 
+config_list = []
+for z0 in SNOW_SURFACE_ROUGHNESS_VALUES:
+    for scheme_name, scheme in scheme_dict.items():
+        for surface_temp_variable in surface_temp_options:
+            for e_sat_curve_name in e_sat_curve_options.keys():
+                config_list.append([z0,scheme_name,surface_temp_variable, e_sat_curve_name])
 
+# %%
+config_df = pd.DataFrame(config_list).rename(columns={
+    0: 'z0',
+    1: 'scheme_name',
+    2: 'surface_measurement',
+    3: 'e_sat_curve'
+})
+config_df
 
-
-
-
-def run_turbpy(inputs):
-    z0_var_name, scheme_name, surface_temp_variable, e_sat_curve_func_name = inputs
-
-    e_sat_curve_func = e_sat_curve_options[e_sat_curve_func_name]
-
-    sfcTemp = variables_df[surface_temp_variable]
+# %%
+run_df_list = []
+for i, row in config_df.iterrows():
+    e_sat_curve_func = e_sat_curve_options[row['e_sat_curve']]
+    sfcTemp = variables_df[row['surface_measurement']]
     sfcVaporPress = e_sat_curve_func(sfcTemp - 273.15)
-
-    if z0_var_name in z0_values_constant:
-        z0_values_local = np.full(sfcTemp.shape, z0_var_name)
-    elif z0_var_name in z0_variable_names:
-        z0_values_local = variables_df[z0_var_name]
+    if row['z0'] in z0_values_constant:
+        z0_values_local = np.full(sfcTemp.shape, row['z0'])
+    elif row['z0'] in z0_variable_names:
+        z0_values_local = variables_df[row['z0']]
     else:
-        raise ValueError(f"z0_var_name provided invalid: {z0_var_name}")
+        raise ValueError(f"z0_var_name provided invalid: {row['z0']}")
+    model_run_name = f"{row['scheme_name']} {row['surface_measurement']} {row['e_sat_curve']} {str(row['z0'])}"
+    new_inputs_df = pd.DataFrame({
+        'scheme_name'       : np.full(len(airTemp), row['scheme_name']),
+        'ts_variable'       : np.full(len(airTemp), row['surface_measurement']),
+        'e_sat_curv'        : np.full(len(airTemp), row['e_sat_curve']),
+        'z0'                : np.full(len(airTemp), row['z0']),
+        'time'              : timestamps,
+        'airTemp'           : airTemp,
+        'airVaporPress'     : airVaporPress,
+        'sfcTemp'           : sfcTemp,
+        'sfcVaporPress'     : sfcVaporPress,
+        'windspd'           : windspd,
+        'airPressure'       : airPressure,
+        'snowDepth'         : snowDepth,
+        'z0_values_local'   : z0_values_local,
+    })
+    run_df_list.append(new_inputs_df)
 
-    model_run_name = f"{str(scheme_name)} {str(surface_temp_variable)} {str(e_sat_curve_func.__name__)} {str(z0_var_name)}"
-
-    stability_correction[model_run_name] = np.zeros_like(sfcTemp)
-    conductance_sensible[model_run_name] = np.zeros_like(sfcTemp)
-    conductance_latent[model_run_name] = np.zeros_like(sfcTemp)
-    sensible_heat[model_run_name] = np.zeros_like(sfcTemp)
-    latent_heat[model_run_name] = np.zeros_like(sfcTemp)
-    zeta[model_run_name] = np.zeros_like(sfcTemp)
-
-    for n, (tair, vpair, tsfc, vpsfc, u, airP, snDep, z0) in enumerate(zip(
-        airTemp, airVaporPress, sfcTemp, sfcVaporPress, windspd, airPressure, snowDepth, z0_values_local
-    )):
-        if any(np.isnan([tair, vpair, tsfc, vpsfc, u, airP, snDep])):
-            stability_correction[model_run_name][n] = np.nan
-            conductance_sensible[model_run_name][n] = np.nan
-            conductance_latent[model_run_name][n] = np.nan
-            sensible_heat[model_run_name][n] = np.nan
-            latent_heat[model_run_name][n] = np.nan
-            zeta[model_run_name][n] = np.nan
-        else:
-            try:
-                (
-                    conductance_sensible[model_run_name][n], 
-                    conductance_latent[model_run_name][n], 
-                    sensible_heat[model_run_name][n],
-                    latent_heat[model_run_name][n],
-                    stab_output,
-                    p_test
-                ) = turbpy.turbFluxes(tair, airP,
-                                                        vpair, u, tsfc,
-                                                        vpsfc, snDep,
-                                                        height, param_dict=scheme_dict[scheme_name],
-                                                        z0Ground=z0, groundSnowFraction=1)
-                # Get the Zeta value from the stability parameters dictionary
-                if scheme_dict[scheme_name]['stability_method'] != 'monin_obukhov':
-                    stability_correction[model_run_name][n] = stab_output['stabilityCorrection']
-                    # SHOULD I JUST BE ASSIGNING NAN HERE?
-                    zeta[model_run_name][n] = np.nan
-                else:
-                    stability_correction[model_run_name][n] = np.nan
-                    zeta[model_run_name][n] = stab_output['zeta']
-            except Exception as exc:
-                print(f"Cought error running turbpy.turbFluxes...{exc}")
-                stability_correction[model_run_name][n] = np.nan
-                conductance_sensible[model_run_name][n] = np.nan
-                conductance_latent[model_run_name][n] = np.nan
-                sensible_heat[model_run_name][n] = np.nan
-                latent_heat[model_run_name][n] = np.nan
-                zeta[model_run_name][n] = np.nan
-                
-
-    return model_run_name, latent_heat, sensible_heat, zeta, conductance_sensible, conductance_latent
+# %%
+run_df = pd.concat(run_df_list)
 
 
+# %%
+def run_turbpy_for_row(row):
+    model_run_name = f"{str(row['scheme_name'])} {str(row['ts_variable'])} {str(row['e_sat_curv'])} {str(row['z0'])}"
+    if any(np.isnan(np.array([
+        row['airTemp'], 
+        row['airPressure'],
+        row['airVaporPress'],
+        row['windspd'],
+        row['sfcTemp'],
+        row['sfcVaporPress'],
+        row['snowDepth'],
+    ]))):
+        return (
+            model_run_name,
+            row['time'],
+            np.nan,
+            np.nan,
+            np.nan,
+            np.nan,
+            np.nan,
+            np.nan 
+        )
+    else:
+        try:
+            return (
+                model_run_name,
+                row['time'],
+            ) + turbpy.turbFluxes(
+                    row['airTemp'], 
+                    row['airPressure'],
+                    row['airVaporPress'],
+                    row['windspd'],
+                    row['sfcTemp'],
+                    row['sfcVaporPress'],
+                    row['snowDepth'],
+                    HEIGHT,
+                    param_dict=scheme_dict[row['scheme_name']],
+                    z0Ground=row['z0_values_local'],
+                    groundSnowFraction=1
+                )
+        except UnboundLocalError:
+            return (
+                model_run_name,
+                row['time'],
+                np.nan,
+                np.nan,
+                np.nan,
+                np.nan,
+                np.nan,
+                np.nan 
+            )
+
+
+# %%
 if __name__ == '__main__':
-    SNOW_SURFACE_ROUGHNESS_VALUES = z0_variable_names + z0_values_constant
-    scheme_dict = {
-        ################################################
-        ###### BULK AERODYNAMIC METHODS
-        ################################################
-        "Standard": {
-                    "stability_method": "standard"
-        },
-        # "Louis b = 12": {
-        #             "stability_method": "louis",
-        #             "stability_params": {
-        #                 "louis": 24.0
-        #             }
-        # },
-        ################################################
-        ###### MOST METHODS USING YANG LENGTHS
-        ################################################
-        # I added this one to the Turbpy Code base to match my own solution
-        # 'MO Marks Dozier': {
-        #             'stability_method': 'monin_obukhov',
-        #             'monin_obukhov': {
-        #                 'gradient_function': 'marks_dozier',
-        #                 'roughness_function': 'yang_08'
-        #             },
-        #             'stability_params': {
-        #                 'marks_dozier': 5.2
-        #             }
-        # },
-        'MO Holtslag de Bruin': {
-                    'stability_method': 'monin_obukhov',
-                    'monin_obukhov': {
-                        'gradient_function': 'holtslag_debruin',
-                        'roughness_function': 'yang_08'
-                    }
-        },
-        'MO Webb NoahMP': {
-                    'stability_method': 'monin_obukhov',
-                    'monin_obukhov': {
-                        'gradient_function': 'webb_noahmp',
-                        'roughness_function': 'yang_08'
-                    },
-        },
-        "MO Beljaars Holtslag": {
-                    "monin_obukhov": {
-                        "gradient_function": "beljaar_holtslag",
-                        'roughness_function': 'yang_08'
-                    },
-                    'stability_method': 'monin_obukhov'
-        },
-        "MO Cheng Brutsaert": {
-                    "monin_obukhov": {
-                        "gradient_function": "cheng_brutsaert",
-                        'roughness_function': 'yang_08'
-                    },
-                    'stability_method': 'monin_obukhov'
-        },
-        ################################################
-        ###### THESE ARE ALL USING ANDREAS LENGTHS
-        ################################################
-        # 'MO Marks Dozier andreas lengths': {
-        #             'stability_method': 'monin_obukhov',
-        #             'monin_obukhov': {
-        #                 'gradient_function': 'marks_dozier',
-        #                 'roughness_function': 'andreas'
-        #             },
-        #             'stability_params': {
-        #                 'marks_dozier': 5.2
-        #             }
-        # },
-        'MO Holtslag de Bruin andreas lengths': {
-                    'stability_method': 'monin_obukhov',
-                    'monin_obukhov': {
-                        'gradient_function': 'holtslag_debruin',
-                        'roughness_function': 'andreas'
-                    }
-        },
-        'MO Webb NoahMP andreas lengths': {
-                    'stability_method': 'monin_obukhov',
-                    'monin_obukhov': {
-                        'gradient_function': 'webb_noahmp',
-                        'roughness_function': 'andreas'
-                    },
-        },
-        "MO Beljaars Holtslag andreas lengths": {
-                    "monin_obukhov": {
-                        "gradient_function": "beljaar_holtslag",
-                        'roughness_function': 'andreas'
-                    },
-                    'stability_method': 'monin_obukhov'
-        },
-        "MO Cheng Brutsaert andreas lengths": {
-                    "monin_obukhov": {
-                        "gradient_function": "cheng_brutsaert",
-                        'roughness_function': 'andreas'
-                    },
-                    'stability_method': 'monin_obukhov'
-        },
-    }
+    client = Client() 
+    client
 
-    surface_temp_options = [
-        'Tsurf_c',
-        'Tsurf_d',
-        # 'Tsurf_uw',
-        # 'Tsurf_ue',
-        'Tsurf_rad_d'
-    ]
+    # %%
+    ddf = dd.from_pandas(run_df, npartitions=8)
+    q = ddf.apply(run_turbpy_for_row, axis=1, meta=(None, 'int64'))
 
-    e_sat_curve_options = {
-        # 'e_sat_metpy': e_sat_metpy,
-        'e_sat_alduchov': e_sat_alduchov
-    }
+    # %%
+    # %%time
+    results = q.compute()
 
-    config_list = []
-    for z0 in SNOW_SURFACE_ROUGHNESS_VALUES:
-        for scheme_name, scheme in scheme_dict.items():
-            for surface_temp_variable in surface_temp_options:
-                for e_sat_curve_name in e_sat_curve_options.keys():
-                    config_list.append([z0,scheme_name,surface_temp_variable, e_sat_curve_name])
-
-    # Initialzie dictionaries for containing output
-    stability_correction = {}
-    conductance_sensible = {}
-    conductance_latent = {}
-    sensible_heat = {}
-    latent_heat = {}
-    zeta = {}
-
-    print("Running the models")
-    import multiprocessing
-    from joblib import Parallel, delayed
-    from tqdm import tqdm
-
-    config_list_tqdm = tqdm(config_list)
-
-    processed_results =  Parallel(n_jobs = PARALLELISM)(
-        delayed(run_turbpy)(config) for config in config_list_tqdm
+    # %%
+    results_df = pd.DataFrame(results.reset_index(drop=True))
+    results_df = pd.DataFrame({'results':results_df[0].apply(lambda tup: np.array(tup))})
+    results_df = pd.DataFrame(
+        results_df['results'].to_list(),
+        columns = [
+            'config', 
+            'time', 
+            'conductanceSensible',
+            'conductanceLatent',
+            'senHeatGround',
+            'latHeatGround',
+            'stabilityCorrectionParameters',
+            'param_dict',
+        ]
     )
-    
-    df = pd.DataFrame()
-    for result in processed_results:
-        model_run_name, latent_heat, sensible_heat, zeta, conductance_sensible, conductance_latent = result
-        new_df = pd.DataFrame({
-                    'time': variables_df.time.values,
-                    'config': np.full(len(latent_heat[model_run_name]), model_run_name),
-                    'latent heat flux': latent_heat[model_run_name],
-                    'sensible heat flux': sensible_heat[model_run_name],
-                    'zeta': zeta[model_run_name],
-                    'latent heat conductance': conductance_latent[model_run_name],
-                    'sensible heat conductance': conductance_sensible[model_run_name],
-                })
-        # convert from W/m^2 to g/m^2/s
-        new_df['latent heat flux'] = - new_df['latent heat flux']/2838
-        new_df['sensible heat flux'] = - new_df['sensible heat flux']
-        # convert from W/m^2 to ˚C*m/s
-        new_df[f'sensible heat flux'] = (new_df[f'sensible heat flux']/(variables_df['airdensity_3m_c']*0.718*1000))
-        df = pd.concat([df, new_df])
 
-    df.to_parquet("model_results.parquet")
+    # %%
+    final_results_df = results_df.rename(columns={
+        'latHeatGround': 'latent heat flux',
+        'senHeatGround': 'sensible heat flux',
+        'conductanceLatent': 'latent heat conductance',
+        'conductanceSensible': 'sensible heat conductance',
+    })
+    final_results_df
+
+    # %%
+    final_results_df.to_parquet(
+        "model_results.parquet"
+    )
