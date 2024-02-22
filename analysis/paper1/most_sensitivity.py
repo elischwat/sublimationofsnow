@@ -1,3 +1,20 @@
+# -*- coding: utf-8 -*-
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     custom_cell_magics: kql
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.11.2
+#   kernelspec:
+#     display_name: sublimationofsnow
+#     language: python
+#     name: python3
+# ---
+
 # %% [markdown]
 # In this notebook we run TurbPy and examine the sensivity of TurbPy's MOST solutions to:
 # 1. the saturation vapor pressure curve used to calculate surface water vapor pressure from surface temperature measurement
@@ -18,6 +35,7 @@ import pint_xarray
 import turbpy
 from dask.distributed import Client
 import dask.dataframe as dd
+from datetime import datetime
 
 
 # %% [markdown]
@@ -354,18 +372,24 @@ def run_turbpy_for_row(row):
 
 # %%
 if __name__ == '__main__':
-    client = Client() 
-    client
+    print("Starting dask client...")
+    client = Client()
+    print('Access client gere:')
+    print(client.dashboard_link)
 
     # %%
     ddf = dd.from_pandas(run_df, npartitions=8)
     q = ddf.apply(run_turbpy_for_row, axis=1, meta=(None, 'int64'))
 
     # %%
-    # %%time
+    print("Starting computation...")
+    start_time = datetime.now()
     results = q.compute()
+    end_time = datetime.now()
+    print('Duration: {}'.format(end_time - start_time))
+    
 
-    # %%
+        # %%
     results_df = pd.DataFrame(results.reset_index(drop=True))
     results_df = pd.DataFrame({'results':results_df[0].apply(lambda tup: np.array(tup))})
     results_df = pd.DataFrame(
