@@ -22,15 +22,15 @@ import turbpy
 # * use `analysis/sos/create_turbulence_dataset.ipynb` to create SoS tidy dataset and the (disdrometer) precip data
 
 # paseed to Parallel as the n_jobs parameter
-PARALLELISM = 20
+PARALLELISM = 4
 
 # Inputs
 start_date = '20221130'
 end_date = '20230509'
 
-# # Open Data 
-tidy_df_30Min = pd.read_parquet(f"tidy_df_30min_{start_date}_{end_date}_noplanar_fit_clean.parquet")
-tidy_df_30Min['time'] = pd.to_datetime(tidy_df_30Min['time'])
+# # Open Data                     
+tidy_df = pd.read_parquet(f"tidy_df_{start_date}_{end_date}_noplanar_fit_clean.parquet")
+tidy_df['time'] = pd.to_datetime(tidy_df['time'])
 
 # returns in Pascals
 def e_sat_metpy(temp_in_c):
@@ -81,7 +81,7 @@ VARIABLES = [
 ] + z0_variable_names
 
 # CREATE WIDE DATAFRAME
-variables_df = tidy_df_30Min[tidy_df_30Min.variable.isin(VARIABLES)].pivot_table(
+variables_df = tidy_df[tidy_df.variable.isin(VARIABLES)].pivot_table(
     values = 'value',
     index = 'time',
     columns='variable'
