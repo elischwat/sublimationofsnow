@@ -70,21 +70,15 @@ VARIABLES = [
     # 'Tsurf_uw',
     # 'Tsurf_ue',
     'Tsurf_rad_d',
+    'Tsnow_1_0m_d',
+    'Tsnow_0_4m_d',
     'P_10m_c',
-    ## Input variables for calculating dewpoint temperature
-    'T_3m_c',
-    'RH_3m_c',
-    ## Input Variables
-    'spd_3m_c',
-    'P_10m_c',
-    # 'Tpot_3m_c',
-    'airdensity_3m_c',
-    'mixingratio_3m_c',
-    # 'T_3m_c',
+    ## Input variables
+    'T_3m_c',           'T_5m_c',           'T_10m_c',           'T_15m_c',           'T_20m_c',           
+    'RH_3m_c',          'RH_5m_c',          'RH_10m_c',          'RH_15m_c',          'RH_20m_c',          
+    'spd_3m_c',         'spd_5m_c',         'spd_10m_c',         'spd_15m_c',         'spd_20m_c',         
+    'mixingratio_3m_c', 'mixingratio_5m_c', 'mixingratio_10m_c', 'mixingratio_15m_c', 'mixingratio_20m_c', 
     ## Measurement Variables
-    'w_h2o__3m_c',
-    'u*_3m_c',
-    'Ri_3m_c',
     'SnowDepth_d',
 ] + z0_variable_names
 
@@ -97,7 +91,6 @@ output_var_names = [
 
 latent_heat_of_vaporization = 2838 * units("J/g")
 INVERSION_HEIGHT = 600
-SOS_INSTRUMENT_HEIGHT = 3
 
 # CREATE WIDE DATAFRAME
 sos_inputs_df = tidy_df[tidy_df.variable.isin(VARIABLES)].pivot_table(
@@ -108,25 +101,30 @@ sos_inputs_df = tidy_df[tidy_df.variable.isin(VARIABLES)].pivot_table(
 
 
 def run_coare(inputs):
-    z0_var_name, surface_temp_variable, e_sat_curve_func_name = inputs
+    z0_var_name, surface_temp_variable, e_sat_curve_func_name, meas_height = inputs
+
+    t_var =             f'T_{meas_height}m_c'
+    rh_var =            f'RH_{meas_height}m_c'
+    spd_var =           f'spd_{meas_height}m_c'
+    mixingratio_var =   f'mixingratio_{meas_height}m_c'
     
     e_sat_curve_func = e_sat_curve_options[e_sat_curve_func_name]
-    model_run_name = f"{str(surface_temp_variable)} {str(e_sat_curve_func.__name__)} {z0_var_name}"
+    model_run_name = f"{str(surface_temp_variable)} {str(e_sat_curve_func.__name__)} {z0_var_name} {meas_height}m"
     
     results_list = []
 
     for time, row in sos_inputs_df.iterrows():
         bulk_inputs = [
-            row['spd_3m_c'],
+            row[spd_var],
             row[surface_temp_variable],
-            row['T_3m_c'],
-            row['mixingratio_3m_c'],
+            row[t_var],
+            row[mixingratio_var],
             INVERSION_HEIGHT,
             row['P_10m_c'],
-            SOS_INSTRUMENT_HEIGHT - row['SnowDepth_d'],
-            SOS_INSTRUMENT_HEIGHT - row['SnowDepth_d'],
-            SOS_INSTRUMENT_HEIGHT - row['SnowDepth_d'],
-            row['RH_3m_c'],
+            meas_height - row['SnowDepth_d'],
+            meas_height - row['SnowDepth_d'],
+            meas_height - row['SnowDepth_d'],
+            row[rh_var],
             1 # vwc "volumetric water content" doesn't matter if snow_flag = 1
         ]
         if any(pd.isnull(np.array(bulk_inputs))):
@@ -173,7 +171,18 @@ if __name__ == '__main__':
         'Tsurf_d',
         # 'Tsurf_uw',
         # 'Tsurf_ue',
-        'Tsurf_rad_d'
+        'Tsurf_rad_d',
+        # Including these two for an analysis, see flux_divergence.ipynb
+        'Tsnow_1_0m_d',
+        'Tsnow_0_4m_d',
+    ]
+
+    meas_heights = [
+        3,
+        5,
+        10,
+        15,
+        20
     ]
 
     e_sat_curve_options = {
@@ -185,8 +194,8 @@ if __name__ == '__main__':
     for z0 in SNOW_SURFACE_ROUGHNESS_VALUES:
         for surface_temp_variable in surface_temp_options:
             for e_sat_curve_name in e_sat_curve_options.keys():
-                config_list.append([z0,surface_temp_variable,
-                e_sat_curve_name])  
+                for h in meas_heights:
+                    config_list.append([z0,surface_temp_variable, e_sat_curve_name, h])  
 
     print("Running the models")
 
