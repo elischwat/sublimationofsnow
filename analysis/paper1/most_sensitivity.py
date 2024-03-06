@@ -106,7 +106,7 @@ VARIABLES = [
     'w_h2o__3m_c',
     'u*_3m_c',
     'Ri_3m_c',
-    'SnowDepth_d',
+    'SnowDepth_c',
 ] + z0_variable_names
 
 # %%
@@ -139,7 +139,7 @@ HEIGHT = 3
 
 # %%
 timestamps = variables_df.time.values
-snowDepth = variables_df['SnowDepth_d']
+snowDepth = variables_df['SnowDepth_c']
 airTemp = variables_df['T_3m_c']
 windspd = variables_df['spd_3m_c']
 airPressure = (variables_df['P_10m_c'].values * units.millibar).to(units.pascal).magnitude

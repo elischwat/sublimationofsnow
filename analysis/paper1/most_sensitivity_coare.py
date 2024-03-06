@@ -79,7 +79,7 @@ VARIABLES = [
     'spd_3m_c',         'spd_5m_c',         'spd_10m_c',         'spd_15m_c',         'spd_20m_c',         
     'mixingratio_3m_c', 'mixingratio_5m_c', 'mixingratio_10m_c', 'mixingratio_15m_c', 'mixingratio_20m_c', 
     ## Measurement Variables
-    'SnowDepth_d',
+    'SnowDepth_c',
 ] + z0_variable_names
 
 
@@ -121,9 +121,9 @@ def run_coare(inputs):
             row[mixingratio_var],
             INVERSION_HEIGHT,
             row['P_10m_c'],
-            meas_height - row['SnowDepth_d'],
-            meas_height - row['SnowDepth_d'],
-            meas_height - row['SnowDepth_d'],
+            meas_height - row['SnowDepth_c'],
+            meas_height - row['SnowDepth_c'],
+            meas_height - row['SnowDepth_c'],
             row[rh_var],
             1 # vwc "volumetric water content" doesn't matter if snow_flag = 1
         ]
