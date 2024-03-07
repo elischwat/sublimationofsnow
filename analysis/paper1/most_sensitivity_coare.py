@@ -34,7 +34,7 @@ PARALLELISM = 4
 start_date = '20221130'
 end_date = '20230509'
 
-# # Open Data 
+# # Open Data
 tidy_df = pd.read_parquet(f"tidy_df_{start_date}_{end_date}_noplanar_fit_clean.parquet")
 tidy_df['time'] = pd.to_datetime(tidy_df['time'])
 [v for v in tidy_df.variable.unique() if 'z0' in v]

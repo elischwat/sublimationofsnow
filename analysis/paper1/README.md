@@ -12,7 +12,7 @@ You can run them like this:
 jupyter nbconvert --to html --execute create_turbulence_dataset.ipynb &&\
 jupyter nbconvert --to html --execute clean_turbulence_dataset.ipynb &&\
 jupyter nbconvert --to html --execute calculate_roughness_height.ipynb &&\
-jupyter nbconvert --to html --execute add_z0_to_turbulence_dataset.ipynb &&\
+jupyter nbconvert --to html --execute add_z0_to_turbulence_dataset.ipynb &&\ 
 python most_sensitivity.py &&\
 python most_sensitivity_coare.py
 ```
