@@ -39,7 +39,7 @@ with open(OUTPUT_FILE, "w") as file:
     ]
     VARIABLE_NAMES = list(np.array(variable_sets).flatten())
 
-    sos_files_dir='/Users/elischwat/Development/data/sublimationofsnow/sosqc/sos_qc_geo_tiltcor_v20240213/'
+    sos_files_dir='/Users/elischwat/Development/data/sublimationofsnow/sosqc/sos_qc_geo_tiltcor_v20240307/'
     DATE_FORMAT_STR = '%Y%m%d'
 
     file.write("month height tower a b c tilt tiltaz\n")
