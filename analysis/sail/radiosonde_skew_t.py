@@ -1,3 +1,19 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     custom_cell_magics: kql
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.11.2
+#   kernelspec:
+#     display_name: sublimationofsnow
+#     language: python
+#     name: python3
+# ---
+
 # %%
 import act
 import datetime as dt
@@ -19,8 +35,8 @@ from metpy.units import units
 # one_or_two = input("Y/N for two plots to be produced: ")
 
 # %%
-date_start = "2022-12-15"
-date_end = "2022-12-16"
+date_start = "2023-04-16"
+date_end = "2023-04-16"
 one_or_two = "Y"
 
 
@@ -33,6 +49,19 @@ radiosonde ='gucsondewnpnM1.b1'
 # %%
 start = date_start[0:10]
 end = date_end[0:10]
+
+# %%
+
+# %%
+p = sonde1.pres.values * units.hPa
+t = sonde1.tdry.values * units.degC
+td = mpcalc.dewpoint_from_relative_humidity(sonde1.tdry,sonde1.rh).values
+u = sonde1.u_wind
+v = sonde1.v_wind
+
+# %%
+lcl_pressure, lcl_temperature = mpcalc.lcl(p[0], t[0], td[0])
+
 
 # %%
 def plot_skewT(ds):
@@ -103,9 +132,6 @@ def plot_skewT(ds):
     return
 
 # %%
-# ls ../figures
-
-# %%
 # Download SAIL sonde data
 # try:
 sonde1_start = dt.datetime.strptime(date_start+'T11:00:00','%Y-%m-%dT%H:%M:%S')
@@ -115,11 +141,11 @@ sonde1_end = sonde1_start + dt.timedelta(hours=6)
 # %%
 from tempfile import TemporaryDirectory
 with TemporaryDirectory() as temp_dir:
-    act.discovery.download_data(
+    act.discovery.download_arm_data(
         username,    token,    radiosonde,    start, end,
         output = temp_dir
     )
-    sonde_ds = act.io.armfiles.read_netcdf(glob.glob(os.path.join(temp_dir, '*.cdf')))
+    sonde_ds = act.io.read_arm_netcdf(glob.glob(os.path.join(temp_dir, '*.cdf')))
 
 # %%
 sonde1 = sonde_ds.sel(time=slice(sonde1_start,sonde1_end))
@@ -133,3 +159,5 @@ if one_or_two == "Y":
     plot_skewT(sonde2)
 # except: 
 #     print('Data not found, may not be loaded yet.')
+
+# %%
