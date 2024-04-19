@@ -24,8 +24,8 @@ warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 DOWNLOAD = False
 # don't change this one
 SAIL_DATA_STREAM = 'gucdlrhiM1.b1'
-sail_download_path = f"/Users/elischwat/Development/data/sublimationofsnow/{SAIL_DATA_STREAM}/"
-processed_output_path = f"/Users/elischwat/Development/data/sublimationofsnow/sail_processed/{SAIL_DATA_STREAM}/"
+sail_download_path = f"/storage/elilouis/sublimationofsnow/{SAIL_DATA_STREAM}/"
+processed_output_path = f"/storage/elilouis/sublimationofsnow/sail_processed/{SAIL_DATA_STREAM}/"
 PARALLELISM = 16 # 10 seems optimal on j-lunquist-3; 20 overloaded the memory
 VALLEY_INCLINE = 10
 OFFSETS = [-1500, -1000, -500, -250, -125, 125, 250, 500, 1000, 1500]
