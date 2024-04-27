@@ -14,16 +14,19 @@ import glob
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
+PARALLELISM = 16
+DATA_DIR = "/storage/elilouis/"
+
 # Save to data path
-OUTPUT_PATH = '/Users/elischwat/Development/data/sublimationofsnow/planar_fit/'
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_30min/"
 
 # # Open fast data
-file_list = sorted(glob.glob("/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/*.nc"))
+file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/planar_fit/*.nc"))
 file_list = [f for f in file_list if '202210' not in f]
 
 # Open planar fit fit data
-monthly_file = "/Users/elischwat/Development/data/sublimationofsnow/monthly_planar_fits.csv"
-weekly_file = "/Users/elischwat/Development/data/sublimationofsnow/weekly_planar_fits.csv"
+monthly_file = f"{DATA_DIR}sublimationofsnow/monthly_planar_fits.csv"
+weekly_file = f"{DATA_DIR}sublimationofsnow/weekly_planar_fits.csv"
 fits_df = pd.read_csv(monthly_file, delim_whitespace=True)
 weeklyfits_df = pd.read_csv(weekly_file, delim_whitespace=True)
 fits_df['height'] = fits_df['height'].str.replace('_', '.').astype('float')
@@ -74,7 +77,7 @@ def process_files(file_list, output_file):
     )
     ds = df.set_index('time').to_xarray()
 
-    # # Define function to do Reynolds Averaging
+    # Define function to do Reynolds Averaging
     def create_re_avg_ds(
             ds, 
             re_avg_period_size, 
@@ -124,21 +127,32 @@ def process_files(file_list, output_file):
             
             ds_plain =  create_re_avg_ds(
                 ds, 
-                300*20, 
+                5*60*20,
                 var1 = f'w_{height}m_{tower}', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'w_h2o__{height}m_{tower}'
             )
             ds_fit =    create_re_avg_ds(
                 ds, 
-                300*20, 
+                5*60*20,
                 var1 = f'w_{height}m_{tower}_fit', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'w_h2o__{height}m_{tower}_fit'
             )
-
-            merged_df = ds_plain[f'w_h2o__{height}m_{tower}'].to_dataframe()[[f'w_h2o__{height}m_{tower}']].join(
-                    ds_fit[f'w_h2o__{height}m_{tower}_fit'].to_dataframe()[[f'w_h2o__{height}m_{tower}_fit']]
+            plain_vars = [
+                f'u_{height}m_{tower}',
+                f'v_{height}m_{tower}',
+                f'w_{height}m_{tower}',
+                f'w_h2o__{height}m_{tower}'
+            ]
+            fit_vars = [
+                f'u_{height}m_{tower}_fit',
+                f'v_{height}m_{tower}_fit',
+                f'w_{height}m_{tower}_fit',
+                f'w_h2o__{height}m_{tower}_fit'
+            ]
+            merged_df = ds_plain[plain_vars].to_dataframe()[plain_vars].join(
+                ds_fit[fit_vars].to_dataframe()[fit_vars]
             )
             df_list.append(merged_df)
     
@@ -150,24 +164,21 @@ def process_files(file_list, output_file):
 if __name__ == '__main__':
     n_days = int(len(file_list)/24)
 
+    print(len(file_list))
+
     def print_and_process(i):
         start_i = i*24
         end_i = (i+1)*24
-        output_file = os.path.join(OUTPUT_PATH, file_list[0].split('/')[-1][27:-6]) + '.parquet'
+        output_file = os.path.join(OUTPUT_PATH, file_list[start_i].split('/')[-1][27:-6]) + '.parquet'
         print(f"Processing files from {file_list[start_i].split('/')[-1]} through {file_list[end_i].split('/')[-1]} and saving to: {output_file}")
         process_files(
             file_list[start_i: end_i], 
             output_file
         )
-    #slow 
-    # saved_files_list = []
-    # for i in list(range(0, n_days)):
-    #     returned = print_and_process(i)
-    #     saved_files_list.append(returned)
 
     # fast
-    saved_files_list =  Parallel(n_jobs = 8)(
-        delayed(print_and_process)(i) 
+    saved_files_list =  Parallel(n_jobs = PARALLELISM)(
+        delayed(print_and_process)(i)
         for i in tqdm(list(range(0, n_days)))
     )
     print("Finished processing")
