@@ -15,7 +15,7 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 PARALLELISM = 16
-DATA_DIR = "/storage/elilouis/"
+DATA_DIR = "/Users/elischwat/Development/data/"
 
 # Save to data path
 OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_30min/"
@@ -125,31 +125,67 @@ def process_files(file_list, output_file):
             ds[f'v_{height}m_{tower}_fit'] = ('time', v)
             ds[f'w_{height}m_{tower}_fit'] = ('time', w)
             
-            ds_plain =  create_re_avg_ds(
+            ds_plain_w =  create_re_avg_ds(
                 ds, 
                 5*60*20,
                 var1 = f'w_{height}m_{tower}', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'w_h2o__{height}m_{tower}'
             )
-            ds_fit =    create_re_avg_ds(
+            ds_plain_u =  create_re_avg_ds(
+                ds, 
+                5*60*20,
+                var1 = f'u_{height}m_{tower}', 
+                var2= f'h2o_{height}m_{tower}', 
+                covariance_name = f'u_h2o__{height}m_{tower}'
+            )
+            ds_plain_v =  create_re_avg_ds(
+                ds, 
+                5*60*20,
+                var1 = f'v_{height}m_{tower}', 
+                var2= f'h2o_{height}m_{tower}', 
+                covariance_name = f'v_h2o__{height}m_{tower}'
+            )
+
+            ds_fit_w =    create_re_avg_ds(
                 ds, 
                 5*60*20,
                 var1 = f'w_{height}m_{tower}_fit', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'w_h2o__{height}m_{tower}_fit'
             )
+            ds_fit_u =    create_re_avg_ds(
+                ds, 
+                5*60*20,
+                var1 = f'u_{height}m_{tower}_fit', 
+                var2= f'h2o_{height}m_{tower}', 
+                covariance_name = f'u_h2o__{height}m_{tower}_fit'
+            )
+            ds_fit_v =    create_re_avg_ds(
+                ds, 
+                5*60*20,
+                var1 = f'v_{height}m_{tower}_fit', 
+                var2= f'h2o_{height}m_{tower}', 
+                covariance_name = f'v_h2o__{height}m_{tower}_fit'
+            )
+            ds_plain = pd.join(ds_plain_w).join(ds_plain_u).join(ds_plain_v)
+            ds_fit = pd.join(ds_fit_w).join(ds_fit_u).join(ds_fit_v)
+            
             plain_vars = [
                 f'u_{height}m_{tower}',
                 f'v_{height}m_{tower}',
                 f'w_{height}m_{tower}',
                 f'w_h2o__{height}m_{tower}'
+                f'u_h2o__{height}m_{tower}'
+                f'v_h2o__{height}m_{tower}'
             ]
             fit_vars = [
                 f'u_{height}m_{tower}_fit',
                 f'v_{height}m_{tower}_fit',
                 f'w_{height}m_{tower}_fit',
                 f'w_h2o__{height}m_{tower}_fit'
+                f'u_h2o__{height}m_{tower}_fit'
+                f'v_h2o__{height}m_{tower}_fit'
             ]
             merged_df = ds_plain[plain_vars].to_dataframe()[plain_vars].join(
                 ds_fit[fit_vars].to_dataframe()[fit_vars]
@@ -175,7 +211,8 @@ if __name__ == '__main__':
             file_list[start_i: end_i], 
             output_file
         )
-
+    # slow
+    saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_days)))]
     # fast
     saved_files_list =  Parallel(n_jobs = PARALLELISM)(
         delayed(print_and_process)(i)
