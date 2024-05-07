@@ -107,30 +107,6 @@ def process_file(nc_file, output_file):
     ds = ds[all_vars_in_this_ds]
     
     # create timestamp that makes sense
-    df1 = pd.DataFrame({'time': np.unique(ds['time'])})
-    df2 = pd.DataFrame({'base_time': np.unique(ds['base_time'])})
-    df3 = pd.DataFrame({'sample': np.unique(ds['sample'])})
-    (
-        alt.Chart(df3).mark_tick(thickness=5).encode(
-            alt.X("sample:Q").title(
-                f'sample (n = {len(df3)})'
-            )
-        ).properties(width=600) & 
-
-        alt.Chart(df1).mark_tick(thickness=1).encode(
-            alt.X("time:T").axis(
-                format='%H%M%p'
-            ).title(
-                f'time (n = {len(df1)})'
-            )
-        ).properties(width=600) & 
-
-        alt.Chart(df2).mark_tick(thickness=5).encode(
-            alt.X("base_time:T").title(
-                f'base_time (n = {len(df2)})'
-            )
-        ).properties(width=600)
-    )
     df = ds.to_dataframe().reset_index()
     df['time'] = df.apply(lambda row: dt.datetime(
             year = row['time'].year,
