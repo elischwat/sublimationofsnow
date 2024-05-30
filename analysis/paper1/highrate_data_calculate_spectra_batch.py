@@ -1,38 +1,53 @@
+"""
+    ßCalculates spectra and co-spectra from 20hz high rate data for all dates of high rate data
+    (between 20221101 - 20230619), calculating spectra over a given subset of hours specified by
+    user inputs. The scipy.signal.welch and scipy.signal.csd (Welch for cospectra) algorithms are
+    used (and Parquet files are saved in the specified output directory, in sub-directories
+    "latent_heat", "momentum", "sensible_heat", "velocity". Note that the "start_hour" and
+    "end_hour" input parameters are in UTC time. Operations are a parallelized to increase
+    processing speed.
+
+    Examples running the script
+    #######################################
+    # Example 1, 0900-1700 local time ("daytime")
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 16   -e 24   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1900_0500" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+
+    # Example 2, 1900-0500 ("nighttime")
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 2    -e 12   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0900_1700" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+
+    # Example 3, run script for all two hour subsets of the 24 hour day   
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 17   -e 19   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0000_0200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 19   -e 21   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0200_0400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 21   -e 23   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0400_0600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 23   -e 1    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0600_0800" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 1    -e 3    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0800_1000" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 3    -e 5    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1000_1200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 5    -e 7    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1200_1400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 7    -e 9    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1400_1600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 9    -e 11   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1600_1800" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 11   -e 13   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1800_2000" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 13   -e 15   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/2000_2200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 15   -e 17   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/2200_2400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+    
+    
+"""
 import numpy as np
 import xarray as xr
 
 import datetime as dt
 import pandas as pd
-
-import matplotlib.pyplot as plt
-
-import altair as alt
-alt.data_transformers.enable('json')
+import argparse
 
 from sublimpy import utils
 import glob
 import pytz
 from scipy.signal import welch, csd
-from scipy.stats import chi2
 from joblib import Parallel, delayed
 from tqdm import tqdm
 import os
 
-PARALLELISM = 8
 START_DATE = '20221101'
 END_DATE = '20230619'
-
-# start_i = 16 # this corresponds to hour 0900
-# end_i = 24 # this corresponds to hour 1700
-# output_dir = "/Users/elischwat/Development/data/sublimationofsnow/spectra/0900_1700"
-
-start_i = 2 # this corresponds to hour 1900 of the night before
-end_i = 12 # this corresponds to hour 0500
-output_dir = "/Users/elischwat/Development/data/sublimationofsnow/spectra/1900_0500"
-
-file_path_fast_data = "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/"
-file_list = glob.glob(os.path.join(file_path_fast_data, "*.nc"))
-
 
 DATE_FORMAT = "%Y%m%d"
 datelist = [
@@ -63,11 +78,21 @@ value_vars = [
     ]
 VARIABLES = index_vars + value_vars
 
-def process_date(date): 
-    # identify files we want from this date
+def process_date(date, file_list, start_i, end_i, output_dir): 
     print(f"Processing date: {date}")
-    local_file_list = [ f for f in file_list if f"_{date}" in f]
-    local_file_list = sorted(local_file_list)[start_i:end_i]
+
+    # WHAT IF start_i > end_i
+    if start_i > end_i:
+        # this means that we need to get files from multiple dates  
+        date_obj = dt.datetime.strptime(date, DATE_FORMAT)
+        next_date_obj = date_obj + dt.timedelta(days=1)
+        next_date = next_date_obj.strftime(DATE_FORMAT)
+        local_file_list = [ f for f in file_list if f"_{date}" in f or f"_{next_date}" in f]
+        local_file_list = sorted(local_file_list)[start_i: end_i + 24]
+    else:
+        # identify files we want from this one date
+        local_file_list = [ f for f in file_list if f"_{date}" in f]
+        local_file_list = sorted(local_file_list)[start_i:end_i]
 
     # open files and convert to DF
     ds = xr.open_mfdataset(
@@ -194,19 +219,31 @@ def process_date(date):
             local_df_list.append(local_df.drop(columns=['power spectrum']))
     latheat_copower_spectrum = pd.concat(local_df_list)
 
-    variance_spectrum_spectrum_fn = os.path.join(output_dir, 'velocity', date + '.parquet')
+    dir_velocity = os.path.join(output_dir, 'velocity')
+    if not os.path.exists(dir_velocity):
+        os.makedirs(dir_velocity)
+    variance_spectrum_spectrum_fn = os.path.join(dir_velocity, date + '.parquet')
     variance_spectrum_df = variance_spectrum_df.assign(date = date)
     variance_spectrum_df.to_parquet(variance_spectrum_spectrum_fn)
 
-    momentum_copower_spectrum_fn = os.path.join(output_dir, 'momentum', date + '.parquet')
+    dir_momentum = os.path.join(output_dir, 'momentum')
+    if not os.path.exists(dir_momentum):
+        os.makedirs(dir_momentum)
+    momentum_copower_spectrum_fn = os.path.join(dir_momentum, date + '.parquet')
     momentum_copower_spectrum = momentum_copower_spectrum.assign(date = date)
     momentum_copower_spectrum.to_parquet(momentum_copower_spectrum_fn)
 
-    sensheat_copower_spectrum_fn = os.path.join(output_dir, 'sensible_heat', date + '.parquet')
+    dir_sensible_heat = os.path.join(output_dir, 'sensible_heat')
+    if not os.path.exists(dir_sensible_heat):
+        os.makedirs(dir_sensible_heat)
+    sensheat_copower_spectrum_fn = os.path.join(dir_sensible_heat, date + '.parquet')
     sensheat_copower_spectrum = sensheat_copower_spectrum.assign(date = date)
     sensheat_copower_spectrum.to_parquet(sensheat_copower_spectrum_fn)
 
-    latheat_copower_spectrum_fn = os.path.join(output_dir, 'latent_heat', date + '.parquet')
+    dir_latent_heat = os.path.join(output_dir, 'latent_heat')
+    if not os.path.exists(dir_latent_heat):
+        os.makedirs(dir_latent_heat)
+    latheat_copower_spectrum_fn = os.path.join(dir_latent_heat, date + '.parquet')
     latheat_copower_spectrum = latheat_copower_spectrum.assign(date = date)
     latheat_copower_spectrum.to_parquet(latheat_copower_spectrum_fn)
 
@@ -218,11 +255,55 @@ def process_date(date):
     )
 
 
-if __name__ == '__main__':
-    dates_tqdm = tqdm(datelist)
 
-    print(f"Beginning processing (parallelism = {PARALLELISM})")
-    processed_results =  Parallel(n_jobs = PARALLELISM)(
-        delayed(process_date)(date) for date in dates_tqdm
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-i",
+        "--input-path",
+        type=str,
+        required=True,
+        help="Directory containing fast sos datasets (netcdf files containing 20hz measurements)."
     )
+    parser.add_argument(
+        "-o",
+        "--output-path",
+        type=str,
+        required=True,
+        help="Output directory for files with calculated spectra."
+    )
+    parser.add_argument(
+        "-s",
+        "--start-hour",
+        type=int,
+        required=True,
+        help="Starting hour for calculating spectra. UTC time."
+    )
+    parser.add_argument(
+        "-e",
+        "--end-hour",
+        type=int,
+        required=True,
+        help="Ending hour for calculating spectra. UTC time."
+    )
+    parser.add_argument(
+        "-p",
+        "--parallelism",
+        type=int,
+        required=True,
+        help="Number of cores to use for parallel processing."
+    )
+    args = parser.parse_args()    
+
     
+
+    file_list = glob.glob(os.path.join(args.input_path, "*.nc"))
+    dates_tqdm = tqdm(datelist)
+    start_i, end_i, output_dir = (args.start_hour, args.end_hour, args.output_path)
+    print(f"N total fast files: {len(file_list)}")
+    print(f"Beginning processing (parallelism = {args.parallelism})")
+    processed_results =  Parallel(n_jobs = args.parallelism)(
+        delayed(process_date)(date, file_list, start_i, end_i, output_dir) for date in dates_tqdm
+    )
