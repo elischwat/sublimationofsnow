@@ -14,14 +14,15 @@ import glob
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
-PARALLELISM = 16
+PARALLELISM = 4
 DATA_DIR = "/Users/elischwat/Development/data/"
 
 # Save to data path
 OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_30min/"
+SAMPLES_PER_AVERAGING_LENGTH = 30*60*20
 
 # # Open fast data
-file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/planar_fit/*.nc"))
+file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/sosqc_fast/*.nc"))
 file_list = [f for f in file_list if '202210' not in f]
 
 # Open planar fit fit data
@@ -127,68 +128,164 @@ def process_files(file_list, output_file):
             
             ds_plain_w =  create_re_avg_ds(
                 ds, 
-                5*60*20,
+                SAMPLES_PER_AVERAGING_LENGTH,
                 var1 = f'w_{height}m_{tower}', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'w_h2o__{height}m_{tower}'
-            )
+            )[[
+                f'u_{height}m_{tower}',
+                f'v_{height}m_{tower}',
+                f'w_{height}m_{tower}',
+                f'w_h2o__{height}m_{tower}'
+            ]].to_dataframe()
+
             ds_plain_u =  create_re_avg_ds(
                 ds, 
-                5*60*20,
+                SAMPLES_PER_AVERAGING_LENGTH,
                 var1 = f'u_{height}m_{tower}', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'u_h2o__{height}m_{tower}'
-            )
+            ).to_dataframe()[f'u_h2o__{height}m_{tower}']
             ds_plain_v =  create_re_avg_ds(
                 ds, 
-                5*60*20,
+                SAMPLES_PER_AVERAGING_LENGTH,
                 var1 = f'v_{height}m_{tower}', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'v_h2o__{height}m_{tower}'
-            )
+            ).to_dataframe()[f'v_h2o__{height}m_{tower}']
+            ds_plain_w_w =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'w_{height}m_{tower}', 
+                var2 = f'w_{height}m_{tower}',
+                covariance_name = f'w_w__{height}m_{tower}'
+            ).to_dataframe()[f'w_w__{height}m_{tower}']
+            ds_plain_u_u =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'u_{height}m_{tower}', 
+                var2 = f'u_{height}m_{tower}',
+                covariance_name = f'u_u__{height}m_{tower}'
+            ).to_dataframe()[f'u_u__{height}m_{tower}']
+            ds_plain_v_v =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'v_{height}m_{tower}', 
+                var2 = f'v_{height}m_{tower}',
+                covariance_name = f'v_v__{height}m_{tower}'
+            ).to_dataframe()[f'v_v__{height}m_{tower}']
+            ds_plain_u_w =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'u_{height}m_{tower}', 
+                var2 = f'w_{height}m_{tower}',
+                covariance_name = f'u_w__{height}m_{tower}'
+            ).to_dataframe()[f'u_w__{height}m_{tower}']
+            ds_plain_v_w =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'v_{height}m_{tower}', 
+                var2 = f'w_{height}m_{tower}',
+                covariance_name = f'v_w__{height}m_{tower}'
+            ).to_dataframe()[f'v_w__{height}m_{tower}']
+
+
+
 
             ds_fit_w =    create_re_avg_ds(
                 ds, 
-                5*60*20,
+                SAMPLES_PER_AVERAGING_LENGTH,
                 var1 = f'w_{height}m_{tower}_fit', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'w_h2o__{height}m_{tower}_fit'
-            )
+            )[[
+                f'u_{height}m_{tower}_fit',
+                f'v_{height}m_{tower}_fit',
+                f'w_{height}m_{tower}_fit',
+                f'w_h2o__{height}m_{tower}_fit'
+            ]].to_dataframe()
+
             ds_fit_u =    create_re_avg_ds(
                 ds, 
-                5*60*20,
+                SAMPLES_PER_AVERAGING_LENGTH,
                 var1 = f'u_{height}m_{tower}_fit', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'u_h2o__{height}m_{tower}_fit'
-            )
+            ).to_dataframe()[f'u_h2o__{height}m_{tower}_fit']
             ds_fit_v =    create_re_avg_ds(
                 ds, 
-                5*60*20,
+                SAMPLES_PER_AVERAGING_LENGTH,
                 var1 = f'v_{height}m_{tower}_fit', 
                 var2= f'h2o_{height}m_{tower}', 
                 covariance_name = f'v_h2o__{height}m_{tower}_fit'
-            )
-            ds_plain = pd.join(ds_plain_w).join(ds_plain_u).join(ds_plain_v)
-            ds_fit = pd.join(ds_fit_w).join(ds_fit_u).join(ds_fit_v)
+            ).to_dataframe()[f'v_h2o__{height}m_{tower}_fit']
+            ds_fit_w_w =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'w_{height}m_{tower}_fit', 
+                var2 = f'w_{height}m_{tower}_fit',
+                covariance_name = f'w_w__{height}m_{tower}_fit'
+            ).to_dataframe()[f'w_w__{height}m_{tower}_fit']
+            ds_fit_u_u =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'u_{height}m_{tower}_fit',
+                var2 = f'u_{height}m_{tower}_fit',
+                covariance_name = f'u_u__{height}m_{tower}_fit'
+            ).to_dataframe()[f'u_u__{height}m_{tower}_fit']
+            ds_fit_v_v =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'v_{height}m_{tower}_fit',
+                var2 = f'v_{height}m_{tower}_fit',
+                covariance_name = f'v_v__{height}m_{tower}_fit'
+            ).to_dataframe()[f'v_v__{height}m_{tower}_fit']
+            ds_fit_u_w =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'u_{height}m_{tower}_fit',
+                var2 = f'w_{height}m_{tower}_fit',
+                covariance_name = f'u_w__{height}m_{tower}_fit'
+            ).to_dataframe()[f'u_w__{height}m_{tower}_fit']
+            ds_fit_v_w =  create_re_avg_ds(
+                ds, 
+                SAMPLES_PER_AVERAGING_LENGTH,
+                var1 = f'v_{height}m_{tower}_fit', 
+                var2 = f'w_{height}m_{tower}_fit',
+                covariance_name = f'v_w__{height}m_{tower}_fit'
+            ).to_dataframe()[f'v_w__{height}m_{tower}_fit']
+
+            df_plain = ds_plain_w.join(ds_plain_u).join(ds_plain_v).join(ds_plain_w_w).join(ds_plain_u_u).join(ds_plain_v_v).join(ds_plain_u_w).join(ds_plain_v_w) 
+            df_fit = ds_fit_w.join(ds_fit_u).join(ds_fit_v).join(ds_fit_w_w).join(ds_fit_u_u).join(ds_fit_v_v).join(ds_fit_u_w).join(ds_fit_v_w)          
             
             plain_vars = [
                 f'u_{height}m_{tower}',
                 f'v_{height}m_{tower}',
                 f'w_{height}m_{tower}',
-                f'w_h2o__{height}m_{tower}'
-                f'u_h2o__{height}m_{tower}'
-                f'v_h2o__{height}m_{tower}'
+                f'w_h2o__{height}m_{tower}',
+                f'u_h2o__{height}m_{tower}',
+                f'v_h2o__{height}m_{tower}',
+                f'w_w__{height}m_{tower}',
+                f'u_u__{height}m_{tower}',
+                f'v_v__{height}m_{tower}',
+                f'u_w__{height}m_{tower}',
+                f'v_w__{height}m_{tower}',
             ]
             fit_vars = [
                 f'u_{height}m_{tower}_fit',
                 f'v_{height}m_{tower}_fit',
                 f'w_{height}m_{tower}_fit',
-                f'w_h2o__{height}m_{tower}_fit'
-                f'u_h2o__{height}m_{tower}_fit'
-                f'v_h2o__{height}m_{tower}_fit'
+                f'w_h2o__{height}m_{tower}_fit',
+                f'u_h2o__{height}m_{tower}_fit',
+                f'v_h2o__{height}m_{tower}_fit',
+                f'w_w__{height}m_{tower}_fit',
+                f'u_u__{height}m_{tower}_fit',
+                f'v_v__{height}m_{tower}_fit',
+                f'u_w__{height}m_{tower}_fit',
+                f'v_w__{height}m_{tower}_fit',
             ]
-            merged_df = ds_plain[plain_vars].to_dataframe()[plain_vars].join(
-                ds_fit[fit_vars].to_dataframe()[fit_vars]
+            merged_df = df_plain[plain_vars].join(
+                df_fit[fit_vars]
             )
             df_list.append(merged_df)
     
@@ -212,7 +309,7 @@ if __name__ == '__main__':
             output_file
         )
     # slow
-    saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_days)))]
+    # saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_days)))]
     # fast
     saved_files_list =  Parallel(n_jobs = PARALLELISM)(
         delayed(print_and_process)(i)

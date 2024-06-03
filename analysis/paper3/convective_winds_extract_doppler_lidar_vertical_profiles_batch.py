@@ -95,7 +95,7 @@ def process_date(date):
 
     # Calculate horizontal and streamwise velocities
     # Convert radial velocities to horizontal velocities. This makes all velocities positive down-valley.
-    src_rhi['horizontal_velocity'] = ( src_rhi['radial_velocity']/np.cos(np.deg2rad(src_rhi['elevation'])))
+    src_rhi['horizontal_velocity'] = ( src_rhi['radial_velocity'] / np.cos(np.deg2rad(src_rhi['elevation'])))
     # Convert horizontal velocities to streamwise velocities. This a small adjustment for the slope of the valley.
     # Velocities are still positive down-valley.
     
