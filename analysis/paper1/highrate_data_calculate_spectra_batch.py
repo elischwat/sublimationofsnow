@@ -1,5 +1,5 @@
 """
-    ßCalculates spectra and co-spectra from 20hz high rate data for all dates of high rate data
+    Calculates spectra and co-spectra from 20hz high rate data for all dates of high rate data
     (between 20221101 - 20230619), calculating spectra over a given subset of hours specified by
     user inputs. The scipy.signal.welch and scipy.signal.csd (Welch for cospectra) algorithms are
     used (and Parquet files are saved in the specified output directory, in sub-directories
@@ -10,24 +10,37 @@
     Examples running the script
     #######################################
     # Example 1, 0900-1700 local time ("daytime")
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 16   -e 24   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1900_0500" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 2   -e 12   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1900_0500" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
 
     # Example 2, 1900-0500 ("nighttime")
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 2    -e 12   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0900_1700" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 16    -e 0   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0900_1700" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
 
     # Example 3, run script for all two hour subsets of the 24 hour day   
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 17   -e 19   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0000_0200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 19   -e 21   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0200_0400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 21   -e 23   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0400_0600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 23   -e 1    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0600_0800" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 1    -e 3    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0800_1000" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 3    -e 5    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1000_1200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 5    -e 7    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1200_1400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 7    -e 9    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1400_1600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 9    -e 11   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1600_1800" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 11   -e 13   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1800_2000" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 13   -e 15   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/2000_2200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
-    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 15   -e 17   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/2200_2400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 17   -e 19   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1000_1200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 19   -e 21   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1200_1400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 21   -e 23   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1400_1600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 23   -e 1    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1600_1800" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 1    -e 3    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/1800_2000" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 3    -e 5    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/2000_2200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 5    -e 7    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/2200_2400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 7    -e 9    -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0000_0200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 9    -e 11   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0200_0400" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 11   -e 13   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0400_0600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 13   -e 15   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0600_0800" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8 &&
+    python analysis/paper1/highrate_data_calculate_spectra_batch.py -s 15   -e 17   -o "/Users/elischwat/Development/data/sublimationofsnow/spectra/0800_1000" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+
+0000_0200 =====>>>>> 1000_1200
+0200_0400 =====>>>>> 1200_1400
+0400_0600 =====>>>>> 1400_1600
+0600_0800 =====>>>>> 1600_1800
+0800_1000 =====>>>>> 1800_2000
+1000_1200 =====>>>>> 2000_2200
+1200_1400 =====>>>>> 2200_2400
+1400_1600 =====>>>>> 0000_0200
+1600_1800 =====>>>>> 0200_0400
+1800_2000 =====>>>>> 0400_0600
+2000_2200 =====>>>>> 0600_0800
+2200_2400 =====>>>>> 0800_1000
     
     
 """
