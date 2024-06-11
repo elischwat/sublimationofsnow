@@ -14,13 +14,13 @@ from tqdm import tqdm
 Initialize parameters, file inputs
 """
 # base path for a number of different directories this script needs
-DATA_DIR = "/Users/elischwat/Development/data/"
+DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_30min/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_5min/"
 # n cores utilized by application
-PARALLELISM = 8
+PARALLELISM = 20
 # Reynolds averaging length, in units (1/20) seconds
-SAMPLES_PER_AVERAGING_LENGTH = 30*60*20
+SAMPLES_PER_AVERAGING_LENGTH = 5*60*20
 
 # # Open fast data
 file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/sosqc_fast/*.nc"))
@@ -119,90 +119,91 @@ def process_files(file_list, output_file):
         for height in heights:
             # only operate on this height/tower if those measurements are in this day's ds
             if f"u_{height}m_{tower}" in ds:
-                # Retrieve the planar fit parameters for this month, height, tower
-                fitting_params = fits_df.set_index(['month', 'height', 'tower']).loc[
-                    MONTH,
-                    height,
-                    tower
-                ]
-                
-                # Calculate the planar fitted 20Hz u, v, w values
-                u, v, w = extrautils.apply_planar_fit(
-                    ds[f'u_{height}m_{tower}'].values.flatten(),
-                    ds[f'v_{height}m_{tower}'].values.flatten(),
-                    ds[f'w_{height}m_{tower}'].values.flatten(),
-                    fitting_params['a'], 
-                    fitting_params['W_f'],
-                )
-                ds[f'u_{height}m_{tower}_fit'] = ('time', u)
-                ds[f'v_{height}m_{tower}_fit'] = ('time', v)
-                ds[f'w_{height}m_{tower}_fit'] = ('time', w)
+                if (MONTH, height, tower) in fits_df.set_index(['month', 'height', 'tower']).index:
+                    # Retrieve the planar fit parameters for this month, height, tower
+                    fitting_params = fits_df.set_index(['month', 'height', 'tower']).loc[
+                        MONTH,
+                        height,
+                        tower
+                    ]
+                    
+                    # Calculate the planar fitted 20Hz u, v, w values
+                    u, v, w = extrautils.apply_planar_fit(
+                        ds[f'u_{height}m_{tower}'].values.flatten(),
+                        ds[f'v_{height}m_{tower}'].values.flatten(),
+                        ds[f'w_{height}m_{tower}'].values.flatten(),
+                        fitting_params['a'], 
+                        fitting_params['W_f'],
+                    )
+                    ds[f'u_{height}m_{tower}_fit'] = ('time', u)
+                    ds[f'v_{height}m_{tower}_fit'] = ('time', v)
+                    ds[f'w_{height}m_{tower}_fit'] = ('time', w)
 
-                # Define function to do Reynolds Averaging
-                def create_re_avg_ds(ds, var1,  var2, covariance_name):
-                    coarse_ds = ds.coarsen(time=SAMPLES_PER_AVERAGING_LENGTH).mean(skipna=True)
-                    coarse_ds = coarse_ds.assign_coords(time = coarse_ds.time.dt.round('1s'))
-                    coarse_ds = coarse_ds.reindex_like(ds, method='nearest')
-                    ds[f"{var1}_mean"] = coarse_ds[f"{var1}"]
-                    ds[f"{var1}_fluc"] = ds[f"{var1}"] - ds[f"{var1}_mean"]
-                    ds[f"{var2}_mean"] = coarse_ds[f"{var2}"]
-                    ds[f"{var2}_fluc"] = ds[f"{var2}"] - ds[f"{var2}_mean"]
-                    ds[covariance_name] = ds[f"{var2}_fluc"] * ds[f"{var1}_fluc"]
-                    ds = ds.coarsen(time = SAMPLES_PER_AVERAGING_LENGTH).mean()
-                    ds = ds.assign_coords(time = ds.time.dt.round('1s'))
-                    return ds.to_dataframe()
+                    # Define function to do Reynolds Averaging
+                    def create_re_avg_ds(ds, var1,  var2, covariance_name):
+                        coarse_ds = ds.coarsen(time=SAMPLES_PER_AVERAGING_LENGTH).mean(skipna=True)
+                        coarse_ds = coarse_ds.assign_coords(time = coarse_ds.time.dt.round('1s'))
+                        coarse_ds = coarse_ds.reindex_like(ds, method='nearest')
+                        ds[f"{var1}_mean"] = coarse_ds[f"{var1}"]
+                        ds[f"{var1}_fluc"] = ds[f"{var1}"] - ds[f"{var1}_mean"]
+                        ds[f"{var2}_mean"] = coarse_ds[f"{var2}"]
+                        ds[f"{var2}_fluc"] = ds[f"{var2}"] - ds[f"{var2}_mean"]
+                        ds[covariance_name] = ds[f"{var2}_fluc"] * ds[f"{var1}_fluc"]
+                        ds = ds.coarsen(time = SAMPLES_PER_AVERAGING_LENGTH).mean()
+                        ds = ds.assign_coords(time = ds.time.dt.round('1s'))
+                        return ds.to_dataframe()
 
-                # Calculate un-fitted reynolds averaged variables
-                ds_plain_w =    create_re_avg_ds(ds, f'w_{height}m_{tower}', f'h2o_{height}m_{tower}',  f'w_h2o__{height}m_{tower}')[[
-                    f'u_{height}m_{tower}',
-                    f'v_{height}m_{tower}',
-                    f'w_{height}m_{tower}',
-                    f'w_h2o__{height}m_{tower}'
-                ]]
-                ds_plain_u =    create_re_avg_ds(ds, f'u_{height}m_{tower}', f'h2o_{height}m_{tower}', f'u_h2o__{height}m_{tower}' )[f'u_h2o__{height}m_{tower}']
-                ds_plain_v =    create_re_avg_ds(ds, f'v_{height}m_{tower}', f'h2o_{height}m_{tower}', f'v_h2o__{height}m_{tower}' )[f'v_h2o__{height}m_{tower}']
-                ds_plain_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}', f'w_{height}m_{tower}',   f'w_w__{height}m_{tower}'   )[f'w_w__{height}m_{tower}']
-                ds_plain_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'u_{height}m_{tower}',   f'u_u__{height}m_{tower}'   )[f'u_u__{height}m_{tower}']
-                ds_plain_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'v_{height}m_{tower}',   f'v_v__{height}m_{tower}'   )[f'v_v__{height}m_{tower}']
-                ds_plain_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'w_{height}m_{tower}',   f'u_w__{height}m_{tower}'   )[f'u_w__{height}m_{tower}']
-                ds_plain_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'w_{height}m_{tower}',   f'v_w__{height}m_{tower}'   )[f'v_w__{height}m_{tower}']
+                    # Calculate un-fitted reynolds averaged variables
+                    ds_plain_w =    create_re_avg_ds(ds, f'w_{height}m_{tower}', f'h2o_{height}m_{tower}',  f'w_h2o__{height}m_{tower}')[[
+                        f'u_{height}m_{tower}',
+                        f'v_{height}m_{tower}',
+                        f'w_{height}m_{tower}',
+                        f'w_h2o__{height}m_{tower}'
+                    ]]
+                    ds_plain_u =    create_re_avg_ds(ds, f'u_{height}m_{tower}', f'h2o_{height}m_{tower}', f'u_h2o__{height}m_{tower}' )[f'u_h2o__{height}m_{tower}']
+                    ds_plain_v =    create_re_avg_ds(ds, f'v_{height}m_{tower}', f'h2o_{height}m_{tower}', f'v_h2o__{height}m_{tower}' )[f'v_h2o__{height}m_{tower}']
+                    ds_plain_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}', f'w_{height}m_{tower}',   f'w_w__{height}m_{tower}'   )[f'w_w__{height}m_{tower}']
+                    ds_plain_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'u_{height}m_{tower}',   f'u_u__{height}m_{tower}'   )[f'u_u__{height}m_{tower}']
+                    ds_plain_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'v_{height}m_{tower}',   f'v_v__{height}m_{tower}'   )[f'v_v__{height}m_{tower}']
+                    ds_plain_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'w_{height}m_{tower}',   f'u_w__{height}m_{tower}'   )[f'u_w__{height}m_{tower}']
+                    ds_plain_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'w_{height}m_{tower}',   f'v_w__{height}m_{tower}'   )[f'v_w__{height}m_{tower}']
 
-                # Calculate fitted reynolds averaged variables
-                ds_fit_w =    create_re_avg_ds(ds,  f'w_{height}m_{tower}_fit', f'h2o_{height}m_{tower}', f'w_h2o__{height}m_{tower}_fit')[[
-                    f'u_{height}m_{tower}_fit',
-                    f'v_{height}m_{tower}_fit',
-                    f'w_{height}m_{tower}_fit',
-                    f'w_h2o__{height}m_{tower}_fit'
-                ]]
-                ds_fit_u =    create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',       f'u_h2o__{height}m_{tower}_fit')[f'u_h2o__{height}m_{tower}_fit']
-                ds_fit_v =    create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',       f'v_h2o__{height}m_{tower}_fit')[f'v_h2o__{height}m_{tower}_fit']
-                ds_fit_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit',     f'w_w__{height}m_{tower}_fit')[f'w_w__{height}m_{tower}_fit']
-                ds_fit_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'u_{height}m_{tower}_fit',     f'u_u__{height}m_{tower}_fit')[f'u_u__{height}m_{tower}_fit']
-                ds_fit_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'v_{height}m_{tower}_fit',     f'v_v__{height}m_{tower}_fit')[f'v_v__{height}m_{tower}_fit']
-                ds_fit_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit',     f'u_w__{height}m_{tower}_fit')[f'u_w__{height}m_{tower}_fit']
-                ds_fit_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit',     f'v_w__{height}m_{tower}_fit')[f'v_w__{height}m_{tower}_fit']
+                    # Calculate fitted reynolds averaged variables
+                    ds_fit_w =    create_re_avg_ds(ds,  f'w_{height}m_{tower}_fit', f'h2o_{height}m_{tower}', f'w_h2o__{height}m_{tower}_fit')[[
+                        f'u_{height}m_{tower}_fit',
+                        f'v_{height}m_{tower}_fit',
+                        f'w_{height}m_{tower}_fit',
+                        f'w_h2o__{height}m_{tower}_fit'
+                    ]]
+                    ds_fit_u =    create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',       f'u_h2o__{height}m_{tower}_fit')[f'u_h2o__{height}m_{tower}_fit']
+                    ds_fit_v =    create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',       f'v_h2o__{height}m_{tower}_fit')[f'v_h2o__{height}m_{tower}_fit']
+                    ds_fit_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit',     f'w_w__{height}m_{tower}_fit')[f'w_w__{height}m_{tower}_fit']
+                    ds_fit_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'u_{height}m_{tower}_fit',     f'u_u__{height}m_{tower}_fit')[f'u_u__{height}m_{tower}_fit']
+                    ds_fit_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'v_{height}m_{tower}_fit',     f'v_v__{height}m_{tower}_fit')[f'v_v__{height}m_{tower}_fit']
+                    ds_fit_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit',     f'u_w__{height}m_{tower}_fit')[f'u_w__{height}m_{tower}_fit']
+                    ds_fit_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit',     f'v_w__{height}m_{tower}_fit')[f'v_w__{height}m_{tower}_fit']
 
-                # Combine different variables into one dataset
-                df_plain = ds_plain_w.join(ds_plain_u).join(ds_plain_v).join(ds_plain_w_w).join(ds_plain_u_u).join(ds_plain_v_v).join(ds_plain_u_w).join(ds_plain_v_w) 
-                df_fit = ds_fit_w.join(ds_fit_u).join(ds_fit_v).join(ds_fit_w_w).join(ds_fit_u_u).join(ds_fit_v_v).join(ds_fit_u_w).join(ds_fit_v_w)          
-                
-                # Isolate the variables we want - this should be unnecessary
-                plain_vars = [
-                    f'u_{height}m_{tower}',         f'v_{height}m_{tower}',         f'w_{height}m_{tower}',
-                    f'w_h2o__{height}m_{tower}',    f'u_h2o__{height}m_{tower}',    f'v_h2o__{height}m_{tower}',
-                    f'w_w__{height}m_{tower}',      f'u_u__{height}m_{tower}',      f'v_v__{height}m_{tower}', f'u_w__{height}m_{tower}', f'v_w__{height}m_{tower}',
-                ]
-                fit_vars = [
-                    f'u_{height}m_{tower}_fit',         f'v_{height}m_{tower}_fit',         f'w_{height}m_{tower}_fit',
-                    f'w_h2o__{height}m_{tower}_fit',    f'u_h2o__{height}m_{tower}_fit',    f'v_h2o__{height}m_{tower}_fit',
-                    f'w_w__{height}m_{tower}_fit',      f'u_u__{height}m_{tower}_fit',      f'v_v__{height}m_{tower}_fit', f'u_w__{height}m_{tower}_fit', f'v_w__{height}m_{tower}_fit',
-                ]
+                    # Combine different variables into one dataset
+                    df_plain = ds_plain_w.join(ds_plain_u).join(ds_plain_v).join(ds_plain_w_w).join(ds_plain_u_u).join(ds_plain_v_v).join(ds_plain_u_w).join(ds_plain_v_w) 
+                    df_fit = ds_fit_w.join(ds_fit_u).join(ds_fit_v).join(ds_fit_w_w).join(ds_fit_u_u).join(ds_fit_v_v).join(ds_fit_u_w).join(ds_fit_v_w)          
+                    
+                    # Isolate the variables we want - this should be unnecessary
+                    plain_vars = [
+                        f'u_{height}m_{tower}',         f'v_{height}m_{tower}',         f'w_{height}m_{tower}',
+                        f'w_h2o__{height}m_{tower}',    f'u_h2o__{height}m_{tower}',    f'v_h2o__{height}m_{tower}',
+                        f'w_w__{height}m_{tower}',      f'u_u__{height}m_{tower}',      f'v_v__{height}m_{tower}', f'u_w__{height}m_{tower}', f'v_w__{height}m_{tower}',
+                    ]
+                    fit_vars = [
+                        f'u_{height}m_{tower}_fit',         f'v_{height}m_{tower}_fit',         f'w_{height}m_{tower}_fit',
+                        f'w_h2o__{height}m_{tower}_fit',    f'u_h2o__{height}m_{tower}_fit',    f'v_h2o__{height}m_{tower}_fit',
+                        f'w_w__{height}m_{tower}_fit',      f'u_u__{height}m_{tower}_fit',      f'v_v__{height}m_{tower}_fit', f'u_w__{height}m_{tower}_fit', f'v_w__{height}m_{tower}_fit',
+                    ]
 
-                # Combined variables and add to the list of generated dataframes
-                merged_df = df_plain[plain_vars].join(
-                    df_fit[fit_vars]
-                )
-                df_list.append(merged_df)
+                    # Combined variables and add to the list of generated dataframes
+                    merged_df = df_plain[plain_vars].join(
+                        df_fit[fit_vars]
+                    )
+                    df_list.append(merged_df)
     
     # Combine datasets from 
     combined_df = df_list[0].join(df_list[1:])
