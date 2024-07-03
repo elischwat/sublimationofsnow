@@ -14,7 +14,7 @@ import datetime, calendar
 from sublimpy import utils
 
 sos_files_dir = '/Users/elischwat/Development/data/sublimationofsnow/sosqc/sos_qc_geo_tiltcor_v20240307/'
-OUTPUT_FILE = '/Users/elischwat/Development/data/sublimationofsnow/monthly_planar_fits.csv'
+OUTPUT_FILE = '/Users/elischwat/Development/data/sublimationofsnow/monthly_planar_fits_oneplane.csv'
 
 
 with open(OUTPUT_FILE, "w") as file:
@@ -79,9 +79,14 @@ with open(OUTPUT_FILE, "w") as file:
 
         sos_ds = xr.concat(datasets, dim='time')
         sos_ds = utils.fill_missing_timestamps(sos_ds)
+        us = []
+        vs = []
+        ws = []
         for u_VAR, v_VAR, w_VAR in variable_sets:
             if (u_VAR in sos_ds) and (v_VAR in sos_ds) and (w_VAR in sos_ds):
-                (a,b,c), (tilt, tiltaz), W_f = extrautils.calculatre_planar_fit(sos_ds[u_VAR], sos_ds[v_VAR], sos_ds[w_VAR])
-                (u_streamwise, v_streamwise, w_streamwise) = extrautils.apply_planar_fit(sos_ds[u_VAR], sos_ds[v_VAR], sos_ds[w_VAR], a, W_f)
-                [height, tower] = u_VAR[2:].split("m_")
-                file.write(f"{month} {height} {tower} {a} {b} {c} {np.rad2deg(tilt)} {np.rad2deg(tiltaz)} {W_f[0]} {W_f[1]} {W_f[2]}\n")
+                us = us + sos_ds[u_VAR].values.tolist()
+                vs = vs + sos_ds[v_VAR].values.tolist()
+                ws = ws + sos_ds[w_VAR].values.tolist()
+        (a,b,c), (tilt, tiltaz), W_f = extrautils.calculate_planar_fit(us, vs, ws)
+        [height, tower] = u_VAR[2:].split("m_")
+        file.write(f"{month} {height} {tower} {a} {b} {c} {np.rad2deg(tilt)} {np.rad2deg(tiltaz)} {W_f[0]} {W_f[1]} {W_f[2]}\n")

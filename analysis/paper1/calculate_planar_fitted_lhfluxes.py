@@ -16,11 +16,13 @@ Initialize parameters, file inputs
 # base path for a number of different directories this script needs
 DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_5min/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_oneplane_5min/"
 # n cores utilized by application
 PARALLELISM = 20
 # Reynolds averaging length, in units (1/20) seconds
 SAMPLES_PER_AVERAGING_LENGTH = 5*60*20
+# Use only one plane for the whole dataset (monthly plane calculated for all measurements)
+ONE_PLANE = True
 
 # # Open fast data
 file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/sosqc_fast/*.nc"))
@@ -29,7 +31,9 @@ file_list = [f for f in file_list if '202210' not in f]
 # Open planar fit data
 monthly_file = f"{DATA_DIR}sublimationofsnow/monthly_planar_fits.csv"
 weekly_file = f"{DATA_DIR}sublimationofsnow/weekly_planar_fits.csv"
+oneplane_file = f"{DATA_DIR}sublimationofsnow/monthly_planar_fits_oneplane.csv"
 fits_df = pd.read_csv(monthly_file, delim_whitespace=True)
+oneplane_fits_df = pd.read_csv(oneplane_file, delim_whitespace=True)
 weeklyfits_df = pd.read_csv(weekly_file, delim_whitespace=True)
 
 # Transform planar fit data
@@ -37,6 +41,10 @@ fits_df['height'] = fits_df['height'].str.replace('_', '.').astype('float')
 weeklyfits_df['start_date'] = pd.to_datetime(weeklyfits_df['start_date'], format='%Y%m%d')
 weeklyfits_df['end_date'] = pd.to_datetime(weeklyfits_df['end_date'], format='%Y%m%d')
 fits_df['W_f'] = fits_df.apply(
+    lambda row: [row['W_f_1'], row['W_f_2'], row['W_f_3']],
+    axis=1
+).drop(columns=['W_f_1', 'W_f_2', 'W_f_3'])
+oneplane_fits_df['W_f'] = oneplane_fits_df.apply(
     lambda row: [row['W_f_1'], row['W_f_2'], row['W_f_3']],
     axis=1
 ).drop(columns=['W_f_1', 'W_f_2', 'W_f_3'])
@@ -115,16 +123,24 @@ def process_files(file_list, output_file):
             heights = [1,2,3,5,10,15,20]
         else:
             heights = [1,3,10]
+
+        FITS_TOWER = tower
         
         for height in heights:
+
+            FITS_HEIGHT = height
+            
+            if ONE_PLANE:
+                FITS_TOWER = 'd'
+                FITS_HEIGHT = 10
             # only operate on this height/tower if those measurements are in this day's ds
             if f"u_{height}m_{tower}" in ds:
                 if (MONTH, height, tower) in fits_df.set_index(['month', 'height', 'tower']).index:
                     # Retrieve the planar fit parameters for this month, height, tower
                     fitting_params = fits_df.set_index(['month', 'height', 'tower']).loc[
                         MONTH,
-                        height,
-                        tower
+                        FITS_HEIGHT,
+                        FITS_TOWER
                     ]
                     
                     # Calculate the planar fitted 20Hz u, v, w values
