@@ -4,6 +4,7 @@ isolates along-valley RHI scan data and, for each scan:
 1. aggregates the scan data in vertical and horizontal bins,
 2. calculates mean, median, std dev, and count for each bin,
 3. saves the data to parquet file.
+4. Also, timezones are converted to local time (US/Mountain).
 """
 
 import numpy as np
