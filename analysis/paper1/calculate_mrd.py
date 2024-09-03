@@ -13,6 +13,9 @@
 
     # Example 2, 1900-0500 ("nighttime")
     python analysis/paper1/calculate_mrd.py -s 2   -e 12   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/1900_0500" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+
+    # Example 1, 1200-1600 local time ("mid-day")
+    python analysis/paper1/calculate_mrd.py -s 19    -e 23   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/1200_1600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
     
     
 """
