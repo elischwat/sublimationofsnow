@@ -16,6 +16,9 @@
 
     # Example 1, 1200-1600 local time ("mid-day")
     python analysis/paper1/calculate_mrd.py -s 19    -e 23   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/1200_1600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+
+    # Example 1, 0800-1200 local time ("morning")
+    python analysis/paper1/calculate_mrd.py -s 15    -e 19   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/0800_1200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
     
     
 """
@@ -34,8 +37,10 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 import os
 
-START_DATE = '20221101'
-END_DATE = '20230619'
+# START_DATE = '20221101'
+# END_DATE = '20230619'
+START_DATE = '20230501'
+END_DATE = '20230510'
 
 DATE_FORMAT = "%Y%m%d"
 datelist = [
