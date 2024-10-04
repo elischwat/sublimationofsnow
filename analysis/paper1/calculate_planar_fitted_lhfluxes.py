@@ -132,13 +132,13 @@ def process_files(file_list, output_file):
 
             FITS_HEIGHT = height
             
-            if ONE_PLANE:
+            if ONE_PLANE: # these are the sing;e values written in the oneplane fits file
                 FITS_TOWER = 'd'
                 FITS_HEIGHT = 10
             # only operate on this height/tower if those measurements are in this day's ds
             # we confirm this, simply, by checking that u exists (should be fine)
             if f"u_{height}m_{tower}" in ds:
-                if (MONTH, height, tower) in fits_df.set_index(['month', 'height', 'tower']).index:
+                if (MONTH, FITS_HEIGHT, FITS_TOWER) in fits_df.set_index(['month', 'height', 'tower']).index:
                     # Retrieve the planar fit parameters for this month, height, tower
                     fitting_params = fits_df.set_index(['month', 'height', 'tower']).loc[
                         MONTH,
