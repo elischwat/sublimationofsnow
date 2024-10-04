@@ -1,5 +1,6 @@
 import os
 import xarray as xr
+import numpy as np
 import datetime as dt
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -16,13 +17,14 @@ Initialize parameters, file inputs
 # base path for a number of different directories this script needs
 DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_oneplane_5min/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_oneplane_30min/"
 # n cores utilized by application
 PARALLELISM = 20
 # Reynolds averaging length, in units (1/20) seconds
-SAMPLES_PER_AVERAGING_LENGTH = 5*60*20
+SAMPLES_PER_AVERAGING_LENGTH = 30*60*20
 # Use only one plane for the whole dataset (monthly plane calculated for all measurements)
-ONE_PLANE = True
+ONE_PLANE = False
+DESPIKE = True
 
 # # Open fast data
 file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/sosqc_fast/*.nc"))
@@ -56,23 +58,23 @@ weeklyfits_df['W_f'] = weeklyfits_df.apply(
 # Set some convenience variables
 always_there_vars = [
     'base_time',
-    'u_2m_c',	'v_2m_c',	'w_2m_c',	'h2o_2m_c',		'tc_2m_c',
-    'u_3m_c',	'v_3m_c',	'w_3m_c',	'h2o_3m_c',		'tc_3m_c',
-    'u_3m_d',	'v_3m_d',	'w_3m_d',	'h2o_3m_d',		'tc_3m_d',
-    'u_3m_ue',	'v_3m_ue',	'w_3m_ue',	'h2o_3m_ue',	'tc_3m_ue',
-    'u_3m_uw',	'v_3m_uw',	'w_3m_uw',	'h2o_3m_uw',	'tc_3m_uw',
-    'u_5m_c',	'v_5m_c',	'w_5m_c',	'h2o_5m_c',		'tc_5m_c',
-    'u_10m_c',	'v_10m_c',	'w_10m_c',	'h2o_10m_c',	'tc_10m_c',
-    'u_10m_d',	'v_10m_d',	'w_10m_d',	'h2o_10m_d',	'tc_10m_d',
-    'u_10m_ue',	'v_10m_ue',	'w_10m_ue',	'h2o_10m_ue',	'tc_10m_ue',
-    'u_10m_uw',	'v_10m_uw',	'w_10m_uw',	'h2o_10m_uw',	'tc_10m_uw',
-    'u_15m_c',	'v_15m_c',	'w_15m_c',	'h2o_15m_c',	'tc_15m_c',
-    'u_20m_c',	'v_20m_c',	'w_20m_c',	'h2o_20m_c',	'tc_20m_c',
+    'u_2m_c',	'v_2m_c',	'w_2m_c',	'h2o_2m_c',		'tc_2m_c',      'irgadiag_2m_c',
+    'u_3m_c',	'v_3m_c',	'w_3m_c',	'h2o_3m_c',		'tc_3m_c',      'irgadiag_3m_c',
+    'u_3m_d',	'v_3m_d',	'w_3m_d',	'h2o_3m_d',		'tc_3m_d',      'irgadiag_3m_d',
+    'u_3m_ue',	'v_3m_ue',	'w_3m_ue',	'h2o_3m_ue',	'tc_3m_ue',     'irgadiag_3m_ue',
+    'u_3m_uw',	'v_3m_uw',	'w_3m_uw',	'h2o_3m_uw',	'tc_3m_uw',     'irgadiag_3m_uw',
+    'u_5m_c',	'v_5m_c',	'w_5m_c',	'h2o_5m_c',		'tc_5m_c',      'irgadiag_5m_c',
+    'u_10m_c',	'v_10m_c',	'w_10m_c',	'h2o_10m_c',	'tc_10m_c',     'irgadiag_10m_c',
+    'u_10m_d',	'v_10m_d',	'w_10m_d',	'h2o_10m_d',	'tc_10m_d',     'irgadiag_10m_d',
+    'u_10m_ue',	'v_10m_ue',	'w_10m_ue',	'h2o_10m_ue',	'tc_10m_ue',    'irgadiag_10m_ue',
+    'u_10m_uw',	'v_10m_uw',	'w_10m_uw',	'h2o_10m_uw',	'tc_10m_uw',    'irgadiag_10m_uw',
+    'u_15m_c',	'v_15m_c',	'w_15m_c',	'h2o_15m_c',	'tc_15m_c',     'irgadiag_15m_c',
+    'u_20m_c',	'v_20m_c',	'w_20m_c',	'h2o_20m_c',	'tc_20m_c',     'irgadiag_20m_c',
 ]
-c_1m_vars = ['u_1m_c',	'v_1m_c',	'w_1m_c',	'h2o_1m_c',		'tc_1m_c']
-d_1m_vars = ['u_1m_d',	'v_1m_d',	'w_1m_d',	'h2o_1m_d',		'tc_1m_d']
-ue_1m_vars = ['u_1m_ue',	'v_1m_ue',	'w_1m_ue',	'h2o_1m_ue',	'tc_1m_ue']
-uw_1m_vars = ['u_1m_uw',	'v_1m_uw',	'w_1m_uw',	'h2o_1m_uw',	'tc_1m_uw']
+c_1m_vars = ['u_1m_c',	'v_1m_c',	'w_1m_c',	'h2o_1m_c',		'tc_1m_c', 'irgadiag_1m_c']
+d_1m_vars = ['u_1m_d',	'v_1m_d',	'w_1m_d',	'h2o_1m_d',		'tc_1m_d', 'irgadiag_1m_d']
+ue_1m_vars = ['u_1m_ue',	'v_1m_ue',	'w_1m_ue',	'h2o_1m_ue',	'tc_1m_ue', 'irgadiag_1m_ue']
+uw_1m_vars = ['u_1m_uw',	'v_1m_uw',	'w_1m_uw',	'h2o_1m_uw',	'tc_1m_uw', 'irgadiag_1m_uw']
 
 """
 Processes a list of files with 20Hz EC data, and produces a planar-fitted 
@@ -134,6 +136,7 @@ def process_files(file_list, output_file):
                 FITS_TOWER = 'd'
                 FITS_HEIGHT = 10
             # only operate on this height/tower if those measurements are in this day's ds
+            # we confirm this, simply, by checking that u exists (should be fine)
             if f"u_{height}m_{tower}" in ds:
                 if (MONTH, height, tower) in fits_df.set_index(['month', 'height', 'tower']).index:
                     # Retrieve the planar fit parameters for this month, height, tower
@@ -142,6 +145,34 @@ def process_files(file_list, output_file):
                         FITS_HEIGHT,
                         FITS_TOWER
                     ]
+
+                    # despike w and h2o variables
+                    if DESPIKE:
+                        def block_median(timeseries, window):
+                            return timeseries.groupby(pd.Grouper(freq=window)).transform('median')
+                        def filter_spike(timeseries, q = 7, window='30min'):
+                            mad = block_median(np.abs(timeseries - block_median(timeseries, window=window)), window=window)
+                            upper_bound = block_median(timeseries, window=window) + q*mad / 0.6745
+                            lower_bound = block_median(timeseries, window=window) - q*mad / 0.6745
+                            is_valid = (timeseries > lower_bound) & (timeseries < upper_bound)
+                            return timeseries.where(is_valid)
+
+                        this_df = ds.to_dataframe()
+                        this_df = pd.DataFrame(
+                                filter_spike(
+                                    df['h2o_{height}m_{tower}'].where(df['irgadiag_{height}m_{tower}'] == 0)
+                                )
+                            ).join(
+                                filter_spike(
+                                    df['w_{height}m_{tower}'].where(df['ldiag_{height}m_{tower}'] == 0)
+                                )
+                            )
+                        ds.assign({
+                            'h2o_{height}m_{tower}': this_df['h2o_{height}m_{tower}'],
+                            'w_{height}m_{tower}': this_df['w_{height}m_{tower}'],
+
+                        })
+                        
                     
                     # Calculate the planar fitted 20Hz u, v, w values
                     u, v, w = extrautils.apply_planar_fit(
@@ -154,6 +185,7 @@ def process_files(file_list, output_file):
                     ds[f'u_{height}m_{tower}_fit'] = ('time', u)
                     ds[f'v_{height}m_{tower}_fit'] = ('time', v)
                     ds[f'w_{height}m_{tower}_fit'] = ('time', w)
+
 
                     # Define function to do Reynolds Averaging
                     def create_re_avg_ds(ds, var1,  var2, covariance_name):
