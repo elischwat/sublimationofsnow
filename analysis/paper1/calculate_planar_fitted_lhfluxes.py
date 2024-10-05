@@ -168,7 +168,7 @@ def process_files(file_list, output_file):
                                     this_df[f'w_{height}m_{tower}'].where(this_df[f'ldiag_{height}m_{tower}'] == 0)
                                 )
                             )
-                        ds.assign({
+                        ds = ds.assign({
                             'h2o_{height}m_{tower}': this_df[f'h2o_{height}m_{tower}'],
                             'w_{height}m_{tower}': this_df[f'w_{height}m_{tower}'],
 
