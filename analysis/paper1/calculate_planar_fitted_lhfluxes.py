@@ -17,14 +17,15 @@ Initialize parameters, file inputs
 # base path for a number of different directories this script needs
 DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_30min_despiked/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_processed_30min_despiked_q3.5/"
+DESPIKE = True
+FILTERING_q = 3.5
 # n cores utilized by application
 PARALLELISM = 20
 # Reynolds averaging length, in units (1/20) seconds
 SAMPLES_PER_AVERAGING_LENGTH = 30*60*20
 # Use only one plane for the whole dataset (monthly plane calculated for all measurements)
 ONE_PLANE = False
-DESPIKE = True
 
 # # Open fast data
 file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/sosqc_fast/*.nc"))
@@ -150,7 +151,7 @@ def process_files(file_list, output_file):
                     if DESPIKE:
                         def block_median(timeseries, window):
                             return timeseries.groupby(pd.Grouper(freq=window)).transform('median')
-                        def filter_spike(timeseries, q = 7, window='30min'):
+                        def filter_spike(timeseries, q = FILTERING_q, window='30min'):
                             mad = block_median(np.abs(timeseries - block_median(timeseries, window=window)), window=window)
                             upper_bound = block_median(timeseries, window=window) + q*mad / 0.6745
                             lower_bound = block_median(timeseries, window=window) - q*mad / 0.6745
@@ -168,11 +169,10 @@ def process_files(file_list, output_file):
                                     this_df[f'w_{height}m_{tower}'].where(this_df[f'ldiag_{height}m_{tower}'] == 0)
                                 )
                             )
-                        ds = ds.assign({
-                            'h2o_{height}m_{tower}': this_df[f'h2o_{height}m_{tower}'],
-                            'w_{height}m_{tower}': this_df[f'w_{height}m_{tower}'],
+                        ds = ds.update(
+                            this_df[[f'h2o_{height}m_{tower}', f'w_{height}m_{tower}']].to_xarray()
+                        )
 
-                        })
                         
                     
                     # Calculate the planar fitted 20Hz u, v, w values
