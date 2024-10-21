@@ -2,15 +2,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import datetime as dt
-from sublimpy import variables, utils, tidy
-import matplotlib.pyplot as plt
-import altair as alt
-alt.data_transformers.enable('json')
-from metpy.calc import specific_humidity_from_mixing_ratio, brunt_vaisala_frequency
-from metpy.units import units
-from metpy.constants import density_water
-import pint_pandas
-import pint_xarray
+from sublimpy import utils, tidy
 import xarray as xr
 import os
 from tqdm import tqdm
@@ -440,25 +432,6 @@ def create_tidy_dataset(
     sos_ds = sos_ds30min
 
     # # Replace fluxes with planar fitted fluxes
-
-    src = sos_ds[[
-        'w_1m_c',   'w_2m_c','w_3m_c', 'w_5m_c', 'w_10m_c', 'w_15m_c', 'w_20m_c',
-        'w_1m_ue',  'w_3m_ue','w_10m_ue',
-        'w_1m_uw',  'w_3m_uw','w_10m_uw',
-        'w_1m_d',   'w_3m_d','w_10m_d',
-    ]]
-    src = tidy.get_tidy_dataset(src, list(src.data_vars))
-    src = utils.modify_df_timezone(src, 'UTC', 'US/Mountain')
-    alt.Chart(
-        src
-    ).mark_line().encode(
-        alt.X('hoursminutes(time):T'),
-        alt.Y('median(value):Q').title('Wind speed (m/s)'),
-        alt.Color('tower:N'),
-        alt.Facet('height:O', columns=4),
-        tooltip='variable',
-    ).properties(width = 125, height = 125, title=    'Streamwise').display(renderer='svg')
-
     planar_fitted_data_df = pd.read_parquet(planar_fitted_dir)
 
 
@@ -470,50 +443,33 @@ def create_tidy_dataset(
         planar_fitted_ds = planar_fitted_data_df.to_xarray()
         sos_ds = sos_ds.assign(planar_fitted_ds)
 
-    src = sos_ds[[
-        'w_1m_c',   'w_2m_c',   'w_3m_c', 'w_5m_c', 'w_10m_c', 'w_15m_c', 'w_20m_c',
-        'w_1m_ue',  'w_3m_ue',  'w_10m_ue',
-        'w_1m_uw',  'w_3m_uw',  'w_10m_uw',
-        'w_1m_d',   'w_3m_d',   'w_10m_d',
-    ]]
-    src = tidy.get_tidy_dataset(src, list(src.data_vars))
-    src = utils.modify_df_timezone(src, 'UTC', 'US/Mountain')
-    alt.Chart(
-        src
-    ).mark_line().encode(
-        alt.X('hoursminutes(time):T'),
-        alt.Y('median(value):Q').title('Wind speed (m/s)').scale(domain = [-0.02,0.02]),
-        alt.Color('tower:N'),
-        alt.Facet('height:O', columns=4),
-        tooltip='variable',
-    ).properties(width = 125, height = 125, title='Streamwise').display(renderer='svg')
+    # # Convert to local time and isolate to study period
+    sos_ds = utils.modify_xarray_timezone(sos_ds, 'UTC', 'US/Mountain')
+    sos_ds = sos_ds.reset_coords(
+        'time (UTC)', drop=True
+    ).reset_coords(
+        'time (US/Mountain)', drop=True
+    ) 
+    sos_ds = sos_ds.to_dataframe().sort_index().loc['20221130': '20230508'].to_xarray()
 
-    alt.Chart(
-        src
-    ).mark_line().encode(
-        alt.X('hoursminutes(time):T'),
-        alt.Y('median(value):Q').title('Wind speed (m/s)').scale(domain = [-0.02,0.02]),
-        alt.Facet('tower:N', columns=4),
-        alt.Color('height:O').scale(scheme='turbo'),
-        tooltip='variable',
-    ).properties(width = 125, height = 125, title='Streamwise').display(renderer='svg')
+    # # Copy fluxes into variables named "raw" so that we keep the raw fluxes around
+    important_ec_variables = [
+        'w_h2o__3m_ue', 'w_h2o__10m_ue', 
+        'w_h2o__3m_d', 'w_h2o__10m_d',
+        'w_h2o__3m_uw', 'w_h2o__10m_uw', 
+        'w_h2o__2m_c', 'w_h2o__3m_c', 'w_h2o__5m_c', 'w_h2o__10m_c', 'w_h2o__15m_c', 'w_h2o__20m_c'
+    ]
+    for var in important_ec_variables:
+        sos_ds[
+            var + '_raw'
+        ] = sos_ds[var]
+
 
     # # Remove instrument-flagged data
-    #
-    # Based on Stiperski and Rotach (2016, http://link.springer.com/10.1007/s10546-015-0103-z), who recommend the following steps as minimum quality criteria:
-    #
-    # 1. The sonic diagnostic flag was set high (malfunctioning of the instrument) inside the averaging period. 
-    # 2. KH20 voltage fell below 5 mV (indication of condensation occurring on the KH20 window).
-    # 3. Skewness of temperature and wind components fell outside the [-2, 2] range, following Vickers and Mahrt (1997).
-    # 4. Kurtosis of temperature and wind components was >8, following Vickers and Mahrt (1997).
-    #
-    # We only implement number #2 and #3. We tried implementing #1, using the ldiag flag to remove sonic data, but it removed a lot of data, and, without using high rate data, we't cannot filter based on a "high" diagnostic flag, we can only filtering using the aggregate of all the flags (i.e. ldiag > 0). The 4th moments are not included in the 5-minute averages, so we cannot implement #4 without using the high rate data.
 
     # ## Set bad Irga measurements to NaN
     #
     # The NCAR report recommends all Irga-related measurements be set to NaN when irgadiag is non-zero.  They did this for some but not all of the data.
-
-    # print('h2o_flux_var', 'irgadiag_var', 'old_nan_count_badirga', 'new_nan_count_badirga', 'old_mean', 'new_mean')
     var_ls = []
     old_nan_count_badirga_ls = []
     new_nan_count_badirga_ls = []
@@ -530,21 +486,11 @@ def create_tidy_dataset(
             old_mean = sos_ds[h2o_flux_var].mean().item()
             old_median = sos_ds[h2o_flux_var].median().item()
 
-            for prefix in ec_measurement_prefixes:
-                var = prefix + suffix
-                if var in sos_ds:
-                    sos_ds[var] = sos_ds[var].where(sos_ds[irgadiag_var] <= PERCENTAGE_DIAG)
-            # for prefix in [
-            #     'h2o_', 'h2o_h2o__', 'u_h2o__', 'v_h2o__', 'w_h2o__',
-            #     # I'M NOT SURE I WANT TO REMOVE THESE w_ MEASUREMENTS BUT I"M CURIOUS WHAT HAPPENS IF I DO
-            #     'w_',
-            # ]:
-
-
+            sos_ds[h2o_flux_var] = sos_ds[h2o_flux_var].where(sos_ds[irgadiag_var] <= PERCENTAGE_DIAG)
+        
             new_nan_count_badirga = (np.isnan(sos_ds[h2o_flux_var])).sum().item()
             new_mean = sos_ds[h2o_flux_var].mean().item()
             new_median = sos_ds[h2o_flux_var].median().item()
-            # print(h2o_flux_var, irgadiag_var, old_nan_count_badirga, new_nan_count_badirga, round(old_mean,6), round(new_mean,6))
             var_ls.append(h2o_flux_var)
             old_nan_count_badirga_ls.append(old_nan_count_badirga)
             new_nan_count_badirga_ls.append(new_nan_count_badirga)
@@ -553,7 +499,6 @@ def create_tidy_dataset(
             old_median_ls.append(old_median)
             new_median_ls.append(new_median)
         else:
-            # print(f"Variable {h2o_flux_var} or {irgadiag_var} not in dataset.")
             var_ls.append(h2o_flux_var)
             old_nan_count_badirga_ls.append(np.nan)
             new_nan_count_badirga_ls.append(np.nan)
@@ -562,28 +507,7 @@ def create_tidy_dataset(
             old_median_ls.append(np.nan)
             new_median_ls.append(np.nan)
 
-    # +
-    fig, axes = plt.subplots(2,1, sharex=True, figsize=(10,5))
-    axes[0].scatter(var_ls, old_nan_count_badirga_ls, label = 'before', color='tab:blue')
-    axes[0].set_ylabel("n of nans")
-    axes[0].scatter(var_ls, new_nan_count_badirga_ls, label = 'after', color='tab:orange')
-
-    axes[1].scatter(var_ls, old_mean_ls, label = 'Mean, before', color='tab:blue')
-    axes[1].set_ylabel("<w'q'>")
-    axes[1].scatter(var_ls, new_mean_ls, label = 'Mean, after', color='tab:orange')
-
-    axes[1].scatter(var_ls, old_median_ls, label = 'Median, before', marker='+', color='tab:blue')
-    axes[1].set_ylabel("<w'q'>")
-    axes[1].scatter(var_ls, new_median_ls, label = 'Median, after', marker='+', color='tab:orange')
-
-    for ax in axes:
-        ax.tick_params(rotation=90, axis='x')
-        ax.legend(title='Filtering', bbox_to_anchor=(1,1))
-
     # ## Set bad Sonic measurements to Nan
-
-    # +
-    # print('h2o_flux_var', 'ldiag_var', 'old_nan_count_badsonic', 'new_nan_count_badsonic', 'old_mean', 'new_mean')
 
     var_ls = []
     old_nan_count_badsonic_ls = []
@@ -599,49 +523,62 @@ def create_tidy_dataset(
             old_nan_count_badsonic = (np.isnan(sos_ds[h2o_flux_var])).sum().item()
             old_mean = sos_ds[h2o_flux_var].mean().item()
             
-            # sos_ds[h2o_flux_var] = sos_ds[h2o_flux_var].where(sos_ds[sonicdiag_var] == 0)
-            # sos_ds[w_var] = sos_ds[w_var].where(sos_ds[sonicdiag_var] == 0)
-            for prefix in ec_measurement_prefixes:
-                var = prefix + suffix
-                if var in sos_ds:
-                    sos_ds[var] = sos_ds[var].where(sos_ds[sonicdiag_var] <= PERCENTAGE_DIAG)
+            sos_ds[h2o_flux_var] = sos_ds[h2o_flux_var].where(sos_ds[sonicdiag_var] <= PERCENTAGE_DIAG)
 
             new_nan_count_badsonic = (np.isnan(sos_ds[h2o_flux_var])).sum().item()
             new_mean = sos_ds[h2o_flux_var].mean().item()
-            # print(h2o_flux_var, sonicdiag_var, old_nan_count_badsonic, new_nan_count_badsonic, round(old_mean,6), round(new_mean,6))
             var_ls.append(h2o_flux_var)
             old_nan_count_badsonic_ls.append(old_nan_count_badsonic)
             new_nan_count_badsonic_ls.append(new_nan_count_badsonic)
             old_mean_ls.append(old_mean)
             new_mean_ls.append(new_mean)
         else:
-            # print(f"Variable {h2o_flux_var} or {sonicdiag_var} not in dataset.")
             var_ls.append(h2o_flux_var)
             old_nan_count_badsonic_ls.append(np.nan)
             new_nan_count_badsonic_ls.append(np.nan)
             old_mean_ls.append(np.nan)
             new_mean_ls.append(np.nan)
 
-    # +
-    fig, axes = plt.subplots(2,1, sharex=True, figsize=(10,5))
-    axes[0].scatter(var_ls, old_nan_count_badsonic_ls, label = 'Before')
-    axes[0].set_ylabel("n of nans")
-    axes[0].scatter(var_ls, new_nan_count_badsonic_ls, label = 'After')
+    # # Plausibility limits
+    PLAUSIBILITY_LIMIT = 0.2
+    var_ls = []
+    old_nan_count_plausibilitylimit_ls = []
+    new_nan_count_plausibilitylimit_ls = []
+    old_mean_ls = []
+    new_mean_ls = []
+    for suffix in ec_measurement_suffixes:
+        w_var = 'w_' + suffix
+        h2o_flux_var = 'w_h2o__' + suffix
+        sonicdiag_var = 'ldiag_' + suffix
 
-    axes[1].scatter(var_ls, old_mean_ls, label = 'Before')
-    axes[1].set_ylabel("<w'q'>")
-    axes[1].scatter(var_ls, new_mean_ls, label = 'After')
+        if h2o_flux_var in sos_ds.variables and sonicdiag_var in sos_ds.variables:
+            old_nan_count_plausibilitylimit = (np.isnan(sos_ds[h2o_flux_var])).sum().item()
+            old_mean = sos_ds[h2o_flux_var].mean().item()
+            
+            sos_ds[h2o_flux_var] = sos_ds[h2o_flux_var].where(np.abs(sos_ds[h2o_flux_var]) < PLAUSIBILITY_LIMIT)
+        
+            new_nan_count_plausibilitylimit = (np.isnan(sos_ds[h2o_flux_var])).sum().item()
+            new_mean = sos_ds[h2o_flux_var].mean().item()
+            var_ls.append(h2o_flux_var)
+            old_nan_count_plausibilitylimit_ls.append(old_nan_count_plausibilitylimit)
+            new_nan_count_plausibilitylimit_ls.append(new_nan_count_plausibilitylimit)
+            old_mean_ls.append(old_mean)
+            new_mean_ls.append(new_mean)
+        else:
+            var_ls.append(h2o_flux_var)
+            old_nan_count_plausibilitylimit_ls.append(np.nan)
+            new_nan_count_plausibilitylimit_ls.append(np.nan)
+            old_mean_ls.append(np.nan)
+            new_mean_ls.append(np.nan)
 
-    for ax in axes:
-        ax.tick_params(rotation=45)
-        ax.legend(title='Filtering')
-
+    # # Analyze cleaning steps
     nan_counts_df = pd.DataFrame({
-        'variable':                     var_ls,
-        'n':                            len(sos_ds.time),
-        'original nan count':           old_nan_count_badirga_ls, 
-        'nans after bad irga removed':  new_nan_count_badirga_ls, 
-        'nans after bad sonic removed': new_nan_count_badsonic_ls, 
+        'variable':                         var_ls,
+        'n':                                len(sos_ds.time),
+        'original nan count':               old_nan_count_badirga_ls, 
+        'nans after bad irga removed':      new_nan_count_badirga_ls, 
+        'nans after bad sonic removed':     new_nan_count_badsonic_ls, 
+        'nans after plausibility limit':    new_nan_count_plausibilitylimit_ls
     })
     limited_nan_counts_df = nan_counts_df[ 
         (~nan_counts_df.variable.str.contains('__1m_'))
@@ -649,381 +586,65 @@ def create_tidy_dataset(
         &
         (~nan_counts_df.variable.str.contains('__2_5m_'))
     ]
-    limited_nan_counts_df
-
+    limited_nan_counts_df.dropna()
+    limited_nan_counts_df['Valid measurements'] = limited_nan_counts_df['n'] - limited_nan_counts_df['original nan count']
     limited_nan_counts_df['Data removed by EC150 flag'] = limited_nan_counts_df['nans after bad irga removed'] - limited_nan_counts_df['original nan count']
     limited_nan_counts_df['Data removed by CSAT3 flag'] = limited_nan_counts_df['nans after bad sonic removed'] - limited_nan_counts_df['nans after bad irga removed']
+    limited_nan_counts_df['Data removed by plausibility limit'] = limited_nan_counts_df['nans after plausibility limit'] - limited_nan_counts_df['nans after bad sonic removed']
     limited_nan_counts_df[[
         'variable',
         'n',
+        'Valid measurements',
         'Data removed by EC150 flag',
-        'Data removed by CSAT3 flag'
-    ]]
-
-    limited_nan_counts_df.dropna()
-
-    src = sos_ds[['SF_avg_1m_ue', 'SF_avg_2m_ue', 'ldiag_3m_c']].to_dataframe().reset_index()
-    src['SF_avg_ue'] = src['SF_avg_1m_ue'] + src['SF_avg_2m_ue']
-    src = utils.modify_df_timezone(src, 'UTC', 'US/Mountain')
-    src['on Dec 21/22'] = (src.time.dt.date == dt.date(2022,12,22)) | (src.time.dt.date == dt.date(2022,12,21))
-    src = src.query("SF_avg_ue > 0")
-    rule = alt.Chart().transform_calculate(rule = '0.1').mark_rule(strokeDash=[2,2]).encode(y='rule:Q')
-    bad_sonic_data = (
-        rule + alt.Chart(src).mark_circle(size=10).encode(
-            alt.X("SF_avg_ue").title("Blowing snow flux (g/m^2/s)").scale(type='log'),
-            alt.Y("ldiag_3m_c").title(["Fraction of 20hz sonic anemometer", "measurements flagged (Tower C, 3m)"]),
-            alt.Color("on Dec 21/22:N")
-        ).properties(width=200, height=200)
-    ).configure_axis(grid=False).configure_legend(columns=2, orient='top')
-    bad_sonic_data.save("bad_sonic_data.png", ppi=200)
-
-    src = sos_ds[['RH_3m_c', 'SF_avg_1m_ue', 'SF_avg_2m_ue', 'ldiag_3m_c', 'ldiag_5m_c', 'ldiag_10m_c', 'ldiag_15m_c', 'ldiag_20m_c']].to_dataframe().reset_index()
-    src['SF_avg_ue'] = src['SF_avg_1m_ue'] + src['SF_avg_2m_ue']
-    src = utils.modify_df_timezone(src, 'UTC', 'US/Mountain')
-    src['on Dec 21/22'] = (src.time.dt.date == dt.date(2022,12,22)) | (src.time.dt.date == dt.date(2022,12,21))
-    src = src.query("SF_avg_ue == 0")
-    rule = alt.Chart().transform_calculate(rule = '9000').mark_rule(strokeDash=[2,2]).encode(y='rule:Q')
-    bad_sonic_data = (
-        alt.Chart(src).transform_fold([
-            'ldiag_3m_c', 'ldiag_5m_c', 'ldiag_10m_c', 'ldiag_15m_c', 'ldiag_20m_c'
-        ]).mark_circle(size=10).encode(
-            alt.X("RH_3m_c").title("RH (%)"),
-            alt.Y("value:Q").title(["Fraction of 20hz sonic anemometer", "measurements flagged (Tower C, 3m)"]),
-            alt.Color("on Dec 21/22:N"),
-            alt.Column('key:N').sort(['ldiag_3m_c', 'ldiag_5m_c', 'ldiag_10m_c', 'ldiag_15m_c', 'ldiag_20m_c'])
-        ).properties(width=200, height=200)
-    ).configure_axis(grid=False).configure_legend(columns=2, orient='top')
-    bad_sonic_data.save("bad_sonic_data.png", ppi=200)
-
-    # +
-    src = sos_ds[['RH_3m_c', 'RH_5m_c', 'RH_10m_c', 'RH_15m_c', 'RH_20m_c', 
-                    'irgadiag_3m_c', 'irgadiag_5m_c', 'irgadiag_10m_c', 'irgadiag_15m_c', 'irgadiag_20m_c', 
-                ]].to_dataframe().reset_index()
-    src = utils.modify_df_timezone(src, 'UTC', 'US/Mountain')
-
-    bad_irga_data_3m = (
-        alt.Chart(src).mark_circle(size=10).encode(
-            alt.X("RH_3m_c:Q").title("Relative humidity, 3m (%)"),
-            alt.Y("irgadiag_3m_c:Q").title(["Sum of EC150 diagnostic flags", "3m"]).scale(type='linear'),
-        ).properties(width=200, height=200)
-    )
-    bad_irga_data_5m = (
-        alt.Chart(src).mark_circle(size=10).encode(
-            alt.X("RH_5m_c:Q").title("Relative humidity, 5m (%)"),
-            alt.Y("irgadiag_5m_c:Q").title(["Sum of EC150 diagnostic flags", "5m"]).scale(type='linear'),
-        ).properties(width=200, height=200)
-    )
-    bad_irga_data_10m = (
-        alt.Chart(src).mark_circle(size=10).encode(
-            alt.X("RH_10m_c:Q").title("Relative humidity, 10m (%)"),
-            alt.Y("irgadiag_10m_c:Q").title(["Sum of EC150 diagnostic flags", "10m"]).scale(type='linear'),
-        ).properties(width=200, height=200)
-    )
-    bad_irga_data_15m = (
-        alt.Chart(src).mark_circle(size=10).encode(
-            alt.X("RH_15m_c:Q").title("Relative humidity, 15m (%)"),
-            alt.Y("irgadiag_15m_c:Q").title(["Sum of EC150 diagnostic flags", "15m"]).scale(type='linear'),
-        ).properties(width=200, height=200)
-    )
-    bad_irga_data_20m = (
-        alt.Chart(src).mark_circle(size=10).encode(
-            alt.X("RH_20m_c:Q").title("Relative humidity, 20m (%)"),
-            alt.Y("irgadiag_20m_c:Q").title(["Sum of EC150 diagnostic flags", "20m"]).scale(type='linear'),
-        ).properties(width=200, height=200)
-    )
-    rule = alt.Chart().transform_calculate(y='9000').mark_rule(color='red', strokeDash=[4,2]).encode(y='y:Q')
-    bad_irga_data = (
-        ((bad_irga_data_3m+rule) | (bad_irga_data_5m+rule) | (bad_irga_data_10m+rule)  )
-        & ((bad_irga_data_15m+rule)| (bad_irga_data_20m+rule))
-        ).configure_axis(grid=False)
-    bad_irga_data.save("bad_irga_data.png", ppi=200)
-
-    # # Remove data points during snowfall
-
-    if FILTER_SNOWFALL:
-        # open the snowfall dataset
-        snowfall_mask_df = pd.read_csv(snowfall_mask_file, index_col=0)
-        snowfall_mask_df.index.name = 'time'
-        snowfall_mask_df.index = pd.to_datetime(snowfall_mask_df.index)
-
-        # add it as a variable too the dataset
-        sos_ds = sos_ds.assign({
-            'snowfall_mask': snowfall_mask_df.to_xarray()['SAIL_gts_pluvio'].reindex_like(sos_ds).astype('bool')
-        })
-
-        for suffix in ec_measurement_suffixes:
-            w_var = 'w_' + suffix
-            h2o_flux_var = 'w_h2o__' + suffix
-            if h2o_flux_var in sos_ds.variables and sonicdiag_var in sos_ds.variables:
-                prefix = 'w_h2o__'
-                var = prefix + suffix
-                if var in sos_ds:
-                    sos_ds[var] = sos_ds[var].where(sos_ds['snowfall_mask'].values, 0)
-            else:
-                None
-                # print(f"Variable {h2o_flux_var} or {sonicdiag_var} not in dataset.")
-
-
-    # # Add additional variables
-
-    # ## Add snow depth
-
-    # Open snow depth data
-
-    towerc_snowdepth_dataset = xr.open_dataset("/Users/elischwat/Development/data/sublimationofsnow/lidar_snow_depth/C_l2.nc")
-    towerc_lidar_snowdepth_da = towerc_snowdepth_dataset.resample(time='1440Min').median()['surface']
-    towerc_lidar_snowdepth_da = towerc_lidar_snowdepth_da.interpolate_na(dim = 'time', method='linear')
-    towerc_lidar_snowdepth_da = towerc_lidar_snowdepth_da.where(towerc_lidar_snowdepth_da > 0, 0)
-    towerc_lidar_snowdepth_upsample_da = towerc_lidar_snowdepth_da.resample(time = '30Min').pad()
-    # towerc_lidar_snowdepth_da.plot()
-    # towerc_lidar_snowdepth_upsample_da.plot()
-    # plt.show()
-
-    towerc_snowdepth_df = towerc_lidar_snowdepth_upsample_da.loc[
-        sos_ds.time.min():sos_ds.time.max()
-    ].to_dataframe()
-    towerc_snowdepth_df = towerc_snowdepth_df.reset_index()
-    sos_ds['SnowDepth_c'] = (['time'],  towerc_snowdepth_df.surface.values)
-
-    towerd_snowdepth_dataset = xr.open_dataset("/Users/elischwat/Development/data/sublimationofsnow/lidar_snow_depth/D_from_D_l6.nc")
-    towerd_lidar_snowdepth_da = towerd_snowdepth_dataset.resample(time='1440Min').median()['surface']
-    towerd_lidar_snowdepth_da = towerd_lidar_snowdepth_da.interpolate_na(dim = 'time', method='linear')
-    towerd_lidar_snowdepth_da = towerd_lidar_snowdepth_da.where(towerd_lidar_snowdepth_da > 0, 0)
-    towerd_lidar_snowdepth_upsample_da = towerd_lidar_snowdepth_da.resample(time = '30Min').pad()
-    # towerd_lidar_snowdepth_da.plot()
-    # towerd_lidar_snowdepth_upsample_da.plot()
-    # plt.show()
-
-    towerd_snowdepth_df = towerd_lidar_snowdepth_upsample_da.loc[
-        sos_ds.time.min():sos_ds.time.max()
-    ].to_dataframe()
-    towerd_snowdepth_df = towerd_snowdepth_df.reset_index()
-    sos_ds['SnowDepth_d'] = (['time'],  towerd_snowdepth_df.surface.values)
-
-    # sos_ds['SnowDepth_c'].plot(label='SnowDepth_c')
-    # sos_ds['SnowDepth_d'].plot(label='SnowDepth_d')
-    # plt.legend()
-
-    # ## Add/calculate longwave radiation and surface temperatures
-
-    sos_ds = variables.add_longwave_radiation(sos_ds)
-    sos_ds = variables.add_surface_temps(sos_ds)
-
-    # ### Clean $T_s$ variables before proceeding with other calculations
-    #
-    # (as of Feb 20, 2023, using NCAR's QC data release, we found a single $T_s$ outlier.)
-
-    Tsurf_vars = [v for v in sos_ds.data_vars if v.startswith('Tsurf')]
-    Tsurf_vars
-
-    for var in Tsurf_vars:
-        None
-        # print(f"{var}\t {round(sos_ds[var].min().item(), 1)}\t{round(sos_ds[var].max().item(), 1)}")
-
-    for var in Tsurf_vars:
-        sos_ds[var] = sos_ds[var].where(
-            (sos_ds[var].values > -40)
-            &
-            (sos_ds[var].values < 40)
-        ).interpolate_na(
-            dim='time', 
-            method='linear'
-        ).where(
-            ~ sos_ds[var].isnull()
-        )
-
-    for var in Tsurf_vars:
-        None
-        # print(f"{var}\t {round(sos_ds[var].min().item(), 1)}\t{round(sos_ds[var].max().item(), 1)}")
-
-
-    fig, axes = plt.subplots(2,2,sharex=True,sharey=True)
-    sos_ds['Tsurf_c'].plot(ax=axes[0][0])
-    sos_ds['Tsurf_d'].plot(ax=axes[0][1])
-    sos_ds['Tsurf_ue'].plot(ax=axes[1][0])
-    sos_ds['Tsurf_uw'].plot(ax=axes[1][1])
-
-    # ## Add $T_v, \theta, \theta_v, \textbf{tke}, R_i, L$
-
-    sos_ds = variables.add_potential_virtual_temperatures(sos_ds)
-    sos_ds = variables.add_surface_potential_virtual_temperatures(sos_ds)
-    sos_ds = variables.add_tke(sos_ds)
-    sos_ds = variables.add_gradients_and_ri(sos_ds)
-    sos_ds = variables.add_shear_velocity_and_obukhov_length(sos_ds)
-
-
-    # ## Add decoupling metric, from Peltola et al. (2021).
-    #
-    # We adjust the height value for snow depth.
-
-    def decoupling_metric(z, sigma_w, N):
-        """Calculate the decoupling metric as described in Peltola et al (2021).
-
-        Peltola, O., Lapo, K., & Thomas, C. K. (2021). A Physics‐Based Universal Indicator for Vertical Decoupling and Mixing Across Canopies Architectures and Dynamic Stabilities. Geophysical Research Letters, 48(5), e2020GL091615. https://doi.org/10.1029/2020GL091615
-        
-        Args:
-            z (float): height of measurements 
-            sigma_w (float): standarad deviation of w, vertical velocity
-            N (float): Brunt-Vaisala frequency
-        """
-        # Brunt Vaisala frequency estimated using the bulk theta gradient
-        # N = np.sqrt(
-        #     g * (theta_e - theta_mean) / theta_mean
-        # )
-
-        Lb = sigma_w / N
-        omega = Lb / ( np.sqrt(2)*z )
-        return omega
-
-
-
-    # +
-    #######################################################################
-    ### OLD METHOD USING GRADIENT-BASED N
-    #######################################################################
-    sigma_w = np.sqrt(sos_ds['w_w__3m_c']).values
-    pot_temps = sos_ds[[
-        'Tpot_2m_c', 
-        'Tpot_3m_c', 
-        'Tpot_4m_c', 
-        'Tpot_5m_c', 
-        'Tpot_6m_c'
-    ]].to_stacked_array(
-        'z', ['time']
-    ).values
-
-    snow_depth_values = sos_ds['SnowDepth_c']
-    snow_depth_values_reshaped = np.repeat(sos_ds['SnowDepth_c'].values, 5).reshape(-1, 5)
-
-    heights = np.full(pot_temps.shape,  [ 2,    3,    4,    5,    6])
-    heights_adjusted = heights - snow_depth_values_reshaped
-    brunt_vaisala_values = [ Ns[1] for Ns in 
-        brunt_vaisala_frequency( 
-            heights_adjusted * units("meters"),
-            pot_temps * units("celsius"), 
-            vertical_dim=1
-        ).magnitude   
-    ]
-    z = np.full(sigma_w.shape, 3) - snow_depth_values.values
-
-    # decoupling_metric(z, sigma_w, N)
-    # print(len(z))
-    # print(len(sigma_w))
-    # print(len(brunt_vaisala_values))
-
-    omegas = decoupling_metric(z, sigma_w, brunt_vaisala_values)
-    sos_ds['omega_3m_c'] = (['time'],  omegas)
-    # print(len(omegas))
-
-    # ## Net LW and Net SW
-
-    # +
-    sos_ds['Rlw_net_9m_d'] = sos_ds['Rlw_in_9m_d'] - sos_ds['Rlw_out_9m_d']
-    sos_ds['Rsw_net_9m_d'] = sos_ds['Rsw_in_9m_d'] - sos_ds['Rsw_out_9m_d']
-
-    sos_ds['Rlw_net_9m_uw'] = sos_ds['Rlw_in_9m_uw'] - sos_ds['Rlw_out_9m_uw']
-
-    # ## Net Radiation
-
-    sos_ds['Rnet_9m_d'] = (
-        (sos_ds['Rsw_in_9m_d'] + sos_ds['Rlw_in_9m_d'])
-        -
-        (sos_ds['Rsw_out_9m_d'] + sos_ds['Rlw_out_9m_d'])
-    )
-
-    # ## Specific humidity
-
-    for var in [
-        'Tsurfmixingratio_c',
-        'mixingratio_1m_c',
-        'mixingratio_2m_c',
-        'mixingratio_3m_c',
-        'mixingratio_4m_c',
-        'mixingratio_5m_c',
-        'mixingratio_6m_c',
-        'mixingratio_7m_c',
-        'mixingratio_8m_c',
-        'mixingratio_9m_c',
-        'mixingratio_10m_c',
-        'mixingratio_11m_c',
-        'mixingratio_12m_c',
-        'mixingratio_13m_c',
-        'mixingratio_14m_c',
-        'mixingratio_15m_c',
-        'mixingratio_16m_c',
-        'mixingratio_17m_c',
-        'mixingratio_18m_c',
-        'mixingratio_19m_c',
-        'mixingratio_20m_c',
-    ]:
-        new_var_name = var.replace('mixingratio', 'specifichumidity')
-        result = specific_humidity_from_mixing_ratio(
-            sos_ds[var]*units('g/g')
-        )
-        sos_ds[new_var_name] = (['time'], result.values)
-        sos_ds[new_var_name] = sos_ds[new_var_name].assign_attrs(units=str(result.pint.units))
+        'Data removed by CSAT3 flag',
+        'Data removed by plausibility limit'
+    ]].dropna()
+            
 
     # # Get Tidy Dataset
     tidy_df = tidy.get_tidy_dataset(sos_ds, list(sos_ds.data_vars))
 
-    # Which variables did not get a "measurement" name assigned?
-    variables_with_no_measurement = tidy_df[tidy_df.measurement.apply(lambda x: x is None)].variable.unique()
-    variables_with_no_measurement
-
-    set(tidy_df.variable.unique()).difference(set(list(sos_ds.data_vars)))
-
-    seconds_in_timestep = 60*30
-    density_water = 1000
-    tidy_df_localized = utils.modify_df_timezone(tidy_df, 'UTC', 'US/Mountain')
-    tidy_df_localized = tidy_df_localized[
-        (tidy_df_localized.time > '20221130')
-        &
-        (tidy_df_localized.time < '20230509')
-    ]
-
-    measured_results_mm = tidy_df_localized[tidy_df_localized.variable.isin([
+    # # Apply mean diurnal cycle gap filling for latent heat fluxes
+    for lhflux_variable in [
         'w_h2o__2m_c',
         'w_h2o__3m_c',
         'w_h2o__5m_c',
         'w_h2o__10m_c',
         'w_h2o__15m_c',
         'w_h2o__20m_c',
-
         'w_h2o__3m_ue',
         'w_h2o__10m_ue',
-
         'w_h2o__3m_uw',
         'w_h2o__10m_uw',
-
         'w_h2o__3m_d',
         'w_h2o__10m_d',
-    ])][
-        ['time', 'value', 'variable']
-    ]
-    measured_results_mm.columns = ['time', 'measured', 'variable']
-    measured_results_mm = measured_results_mm.pivot(
-        index = 'time',
-        columns = 'variable',
-        values = 'measured'
-    )
-    # convert to mm
-    measured_results_mm = measured_results_mm*seconds_in_timestep/density_water
-    measured_results_cumsum = measured_results_mm.cumsum().reset_index()
-    measured_results_cumsum = measured_results_cumsum.melt(id_vars='time')
-    measured_results_cumsum['height'] = measured_results_cumsum['variable'].apply(lambda s: int(s.split('__')[1].split('m')[0]))
-    measured_results_cumsum['tower'] = measured_results_cumsum['variable'].apply(lambda s: s.split('__')[1].split('_')[-1])
-    measured_results_cumsum['tower-height'] = measured_results_cumsum['tower'] + '-' + measured_results_cumsum['height'].astype('str')
-    measured_results_cumsum
+    ]:
+        subset = tidy_df[tidy_df.variable == lhflux_variable].set_index('time')
+        for i,row in subset.iterrows():
+            if np.isnan(row['value']):
+                start_window = i - dt.timedelta(days=3, hours=12)
+                end_window = i + dt.timedelta(days=3, hours=12)
+                src = subset.loc[start_window: end_window].reset_index()
+                means = pd.DataFrame(
+                    src.groupby([src.time.dt.hour, src.time.dt.minute])['value'].mean()
+                )
+                subset.loc[i, 'value'] = means.loc[i.hour, i.minute].value
+        new_values = subset['value'].values
+        measurement = subset['measurement'].values[0]
+        height = subset['height'].values[0]
+        tower = subset['tower'].values[0]
+        # Add new values for variable
+        tidy_df = tidy.tidy_df_add_variable(
+            tidy_df,
+            new_values,
+            lhflux_variable + '_gapfill',
+            measurement,
+            height,
+            tower
+        )
+        tidy_df.query("variable == 'w_h2o__3m_c'").set_index('time')['value'].isna().sum()
 
 
-    src = measured_results_cumsum.groupby(['height', 'tower'])[['value']].max().reset_index()
-    sublimation_totals_per_height_tower_chart = alt.Chart(src).mark_point(size=100).encode(
-        alt.Y("height:O").sort('-y').title("height (m)"),
-        alt.X("value:Q").scale(zero=False).title(["Seasonal sublimation (mm SWE)"]),
-        # alt.Color("height:O").scale(scheme='turbo').legend(columns=2),
-        alt.Shape("tower:N")
-    ).properties(width = 150, height = 150)
-    sublimation_totals_per_height_tower_chart
 
     # # Save dataset
     output_file_name = None
@@ -1044,6 +665,7 @@ def create_tidy_dataset(
         else:
             output_file_name = f'tidy_df_{start_date}_{end_date}_noplanar_fit_STRAIGHTUP_{filtering_str}_flags{PERCENTAGE_DIAG}.parquet', 
 
+    tidy_df = utils.modify_df_timezone(tidy_df, 'US/Mountain', 'UTC')
     tidy_df.to_parquet(os.path.join(output_dir, output_file_name), index=False)
     nan_counts_df_output_file_name = output_file_name.replace("tidy_df_", "nan_cnt_")
     limited_nan_counts_df.to_parquet(os.path.join(output_dir, nan_counts_df_output_file_name))
