@@ -14,7 +14,8 @@ import datetime, calendar
 from sublimpy import utils
 
 sos_files_dir = '/Users/elischwat/Development/data/sublimationofsnow/sosqc/sos_qc_geo_tiltcor_v20240307/'
-OUTPUT_FILE = '/Users/elischwat/Development/data/sublimationofsnow/monthly_planar_fits.csv'
+OUTPUT_FILE = '/Users/elischwat/Development/data/sublimationofsnow/monthly_planar_fits_10sectors.csv'
+wind_dir_bins = np.arange(0, 390, 30)
 
 
 with open(OUTPUT_FILE, "w") as file:
@@ -43,11 +44,11 @@ with open(OUTPUT_FILE, "w") as file:
         ('u_3m_d',   'v_3m_d',   'w_3m_d'),
         ('u_10m_d',   'v_10m_d',   'w_10m_d'),
     ]
-    VARIABLE_NAMES = list(np.array(variable_sets).flatten())
+    VARIABLE_NAMES = list(np.array(variable_sets).flatten()) + ['dir_3m_c']
 
     DATE_FORMAT_STR = '%Y%m%d'
 
-    file.write("month height tower a b c tilt tiltaz W_f_1 W_f_2 W_f_3\n")
+    file.write("month height tower bin_low bin_high a b c tilt tiltaz W_f_1 W_f_2 W_f_3\n")
 
     for month,year in [
         (11,2022),
@@ -79,9 +80,34 @@ with open(OUTPUT_FILE, "w") as file:
 
         sos_ds = xr.concat(datasets, dim='time')
         sos_ds = utils.fill_missing_timestamps(sos_ds)
-        for u_VAR, v_VAR, w_VAR in variable_sets:
-            if (u_VAR in sos_ds) and (v_VAR in sos_ds) and (w_VAR in sos_ds):
-                (a,b,c), (tilt, tiltaz), W_f = extrautils.calculatre_planar_fit(sos_ds[u_VAR], sos_ds[v_VAR], sos_ds[w_VAR])
-                (u_streamwise, v_streamwise, w_streamwise) = extrautils.apply_planar_fit(sos_ds[u_VAR], sos_ds[v_VAR], sos_ds[w_VAR], a, W_f)
-                [height, tower] = u_VAR[2:].split("m_")
-                file.write(f"{month} {height} {tower} {a} {b} {c} {np.rad2deg(tilt)} {np.rad2deg(tiltaz)} {W_f[0]} {W_f[1]} {W_f[2]}\n")
+
+        for bin_low, bin_high in list(zip(wind_dir_bins, wind_dir_bins[1:])):
+            wind_dir = sos_ds[['dir_3m_c']].to_dataframe()
+            wind_dir = wind_dir[wind_dir['dir_3m_c'] > bin_low][wind_dir['dir_3m_c'] <= bin_high]
+            this_winddir_bin_ds = sos_ds.sel(time = wind_dir.index)
+            for u_VAR, v_VAR, w_VAR in variable_sets:
+                if (
+                    (u_VAR in this_winddir_bin_ds) and (v_VAR in this_winddir_bin_ds) and (w_VAR in this_winddir_bin_ds)
+                ) and (
+                    len(this_winddir_bin_ds[u_VAR].dropna(dim='time'))  > 0 
+                    and len(this_winddir_bin_ds[v_VAR].dropna(dim='time')) > 0 
+                    and len(this_winddir_bin_ds[w_VAR].dropna(dim='time')) > 0
+                ):
+                    try:
+                        (a,b,c), (tilt, tiltaz), W_f = extrautils.calculate_planar_fit(
+                            this_winddir_bin_ds[u_VAR], 
+                            this_winddir_bin_ds[v_VAR], 
+                            this_winddir_bin_ds[w_VAR]
+                        )
+                    except ValueError:
+                        print("why nee??")
+                    try:
+                        (u_streamwise, v_streamwise, w_streamwise) = extrautils.apply_planar_fit(
+                            this_winddir_bin_ds[u_VAR], 
+                            this_winddir_bin_ds[v_VAR], 
+                            this_winddir_bin_ds[w_VAR], a, W_f
+                        )
+                    except ValueError:
+                        print("why nee??")
+                    [height, tower] = u_VAR[2:].split("m_")
+                    file.write(f"{month} {height} {tower} {bin_low} {bin_high} {a} {b} {c} {np.rad2deg(tilt)} {np.rad2deg(tiltaz)} {W_f[0]} {W_f[1]} {W_f[2]}\n")
