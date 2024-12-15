@@ -22,10 +22,9 @@ Initialize parameters, file inputs
 # base path for a number of different directories this script needs
 DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_nosector_processed_30min_despiked_q3.5/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/double_rotated_30min_despiked_q3.5/"
 DESPIKE = True
 FILTERING_q = 3.5
-SECTORS = False
 # n cores utilized by application
 PARALLELISM = 20
 # Reynolds averaging length, in units (1/20) seconds
@@ -34,26 +33,6 @@ SAMPLES_PER_AVERAGING_LENGTH = 30*60*20
 # # Open fast data
 file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/sosqc_fast/*.nc"))
 file_list = [f for f in file_list if '202210' not in f]
-wind_dir_bins = np.arange(0, 390, 30)
-    
-# Open planar fit data
-if SECTORS:
-    monthly_file = f"{DATA_DIR}sublimationofsnow/monthly_planar_fits_10sectors.csv"
-else:
-    monthly_file = f"{DATA_DIR}sublimationofsnow/monthly_planar_fits.csv"
-fits_df = pd.read_csv(monthly_file, delim_whitespace=True)
-
-# Transform planar fit data
-fits_df['height'] = fits_df['height'].str.replace('_', '.').astype('float')
-fits_df['W_f'] = fits_df.apply(
-    lambda row: [row['W_f_1'], row['W_f_2'], row['W_f_3']],
-    axis=1
-).drop(columns=['W_f_1', 'W_f_2', 'W_f_3'])
-if SECTORS:
-    fits_df = fits_df.set_index(['month', 'height', 'tower', 'bin_low', 'bin_high'])
-else:
-    fits_df = fits_df.set_index(['month', 'height', 'tower'])
-fits_df = fits_df.sort_index()
 
 
 # Set some convenience variables
@@ -187,77 +166,32 @@ def process_hourly_file(input_file, output_file):
         U_VAR, V_VAR, W_VAR = (f"u_{height}m_{tower}", f"v_{height}m_{tower}", f"w_{height}m_{tower}")
 
         # Make sure that height-tower is in this dataset (this time period may not have those measurements)
-        # and make sure that there is a fit available for this time period and height-tower.
-        # Note that, if we are doing sector planar fitting, we need to remove some extra index values for this check
-        if SECTORS: 
-            index_drop_level = [3,4]
-        else:
-            index_drop_level = []
-        if U_VAR in ds and (MONTH, height, tower) in fits_df.index.droplevel(index_drop_level):
+        if U_VAR in ds:
             if DESPIKE:
                 ds = despike(ds, height, tower)
             # isolate the variables we want to operate on
             local_df = ds[[U_VAR, V_VAR, W_VAR]].to_dataframe()
+            # calculate the 30-minute averaged angles for double rotation
+            local_df['theta'] = local_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
+                lambda row: np.arctan2(row[V_VAR], row[U_VAR]), 
+                axis=1
+            )
+            local_df[U_VAR + '_rotated1'] = local_df[U_VAR]*np.cos(local_df['theta']) + local_df[V_VAR]*np.sin(local_df['theta'])
+            local_df[V_VAR + '_rotated1'] = -local_df[U_VAR]*np.sin(local_df['theta']) + local_df[V_VAR]*np.cos(local_df['theta'])
+            local_df[W_VAR + '_rotated1'] = local_df[W_VAR]
 
-            if SECTORS:
-                # calculate the 30-minute averaged wind direction
-                local_df['wind_direction_block_mean'] = local_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
-                    lambda row: wind_direction(row[U_VAR], row[V_VAR]), axis=1
-                )
-                # group the wind directions into discrete bins, we use the lower bound to identify each bin
-                local_df['wind_direction_block_mean_bin_low'] = pd.cut(
-                    local_df['wind_direction_block_mean'],
-                    wind_dir_bins,
-                    labels = wind_dir_bins[:-1] 
-                )
-                # merge the planar fit parameters into the data, so each row gets the appropriate parameters
-                # WE drop nans here because if U/V/W are nan, then wind_direction_block_mean and wind_direction_block_mean_bin_low
-                # are nan, and then we try to merge using nan as a key, which fails
-                local_df = local_df.dropna()
-                local_df = local_df.reset_index().merge(
-                    fits_df.loc[MONTH, height, tower][['a', 'W_f']],
-                    left_on = 'wind_direction_block_mean_bin_low',
-                    right_on = 'bin_low'
-                ).set_index('time')
-                # group by the wind speed bin and apply the planar fit for each subset of data
-                result = local_df.groupby('wind_direction_block_mean_bin_low').apply(
-                    lambda df: (
-                        df.index, 
-                        extrautils.apply_planar_fit(df[U_VAR], df[V_VAR], df[W_VAR], df['a'].values[0], df['W_f'].values[0])
-                    )
-                )
-                # Wrangle the results from the groupby-apply
-                new_values_df = pd.DataFrame()
-                for key, results in result:
-                    new_values_df = pd.concat([
-                        new_values_df,
-                        pd.DataFrame({
-                            'time': key,
-                            'u':    results[0],
-                            'v':    results[1],
-                            'w':    results[2],
-                        }).set_index('time')
-                    ])
-                new_values_df = new_values_df.sort_index()
-            else: 
-                new_u, new_v, new_w = extrautils.apply_planar_fit(
-                    local_df[U_VAR], 
-                    local_df[V_VAR], 
-                    local_df[W_VAR], 
-                    fits_df.loc[MONTH, height, tower]['a'], 
-                    fits_df.loc[MONTH, height, tower]['W_f'], 
-                )
-                new_values_df = pd.DataFrame({
-                    'time': local_df.index,
-                    'u':    new_u,
-                    'v':    new_v,
-                    'w':    new_w,
-                }).set_index('time')
+            local_df['phi'] = local_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
+                lambda row: np.arctan2(row[W_VAR + '_rotated1'], row[U_VAR + '_rotated1']), 
+                axis=1
+            )
+            local_df[U_VAR + '_rotated2'] = local_df[U_VAR + '_rotated1']*np.cos(local_df['phi']) + local_df[W_VAR + '_rotated1']*np.sin(local_df['phi'])
+            local_df[V_VAR + '_rotated2'] = local_df[V_VAR + '_rotated1']
+            local_df[W_VAR + '_rotated2'] = -local_df[U_VAR + '_rotated1']*np.sin(local_df['phi']) + local_df[W_VAR + '_rotated1']*np.cos(local_df['phi'])
 
             # add the fitted <u,v,w> values to the original xarray dataset
-            ds[f'u_{height}m_{tower}_fit'] =    new_values_df['u'].to_xarray()
-            ds[f'v_{height}m_{tower}_fit'] =    new_values_df['v'].to_xarray()
-            ds[f'w_{height}m_{tower}_fit'] =    new_values_df['w'].to_xarray()
+            ds[f'u_{height}m_{tower}_fit'] = ('time', local_df[U_VAR + '_rotated2'])
+            ds[f'v_{height}m_{tower}_fit'] = ('time', local_df[V_VAR + '_rotated2'])
+            ds[f'w_{height}m_{tower}_fit'] = ('time', local_df[W_VAR + '_rotated2'])
 
             # Calculate un-fitted Reynolds averaged variables
             ds_plain_w_h2o =create_re_avg_ds(ds, f'w_{height}m_{tower}', f'h2o_{height}m_{tower}',  f'w_h2o__{height}m_{tower}')[[
