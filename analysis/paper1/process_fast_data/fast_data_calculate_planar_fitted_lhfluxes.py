@@ -22,10 +22,10 @@ Initialize parameters, file inputs
 # base path for a number of different directories this script needs
 DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_nosector_processed_30min_despiked_q3.5/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_10sector_processed_30min_despiked_q3.5/"
 DESPIKE = True
 FILTERING_q = 3.5
-SECTORS = False
+SECTORS = True
 # n cores utilized by application
 PARALLELISM = 20
 # Reynolds averaging length, in units (1/20) seconds
@@ -198,111 +198,114 @@ def process_hourly_file(input_file, output_file):
                 ds = despike(ds, height, tower)
             # isolate the variables we want to operate on
             local_df = ds[[U_VAR, V_VAR, W_VAR]].to_dataframe()
-
-            if SECTORS:
-                # calculate the 30-minute averaged wind direction
-                local_df['wind_direction_block_mean'] = local_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
-                    lambda row: wind_direction(row[U_VAR], row[V_VAR]), axis=1
-                )
-                # group the wind directions into discrete bins, we use the lower bound to identify each bin
-                local_df['wind_direction_block_mean_bin_low'] = pd.cut(
-                    local_df['wind_direction_block_mean'],
-                    wind_dir_bins,
-                    labels = wind_dir_bins[:-1] 
-                )
-                # merge the planar fit parameters into the data, so each row gets the appropriate parameters
-                # WE drop nans here because if U/V/W are nan, then wind_direction_block_mean and wind_direction_block_mean_bin_low
-                # are nan, and then we try to merge using nan as a key, which fails
-                local_df = local_df.dropna()
-                local_df = local_df.reset_index().merge(
-                    fits_df.loc[MONTH, height, tower][['a', 'W_f']],
-                    left_on = 'wind_direction_block_mean_bin_low',
-                    right_on = 'bin_low'
-                ).set_index('time')
-                # group by the wind speed bin and apply the planar fit for each subset of data
-                result = local_df.groupby('wind_direction_block_mean_bin_low').apply(
-                    lambda df: (
-                        df.index, 
-                        extrautils.apply_planar_fit(df[U_VAR], df[V_VAR], df[W_VAR], df['a'].values[0], df['W_f'].values[0])
+            # Only process data if there are non-nan values
+            if len(local_df) > 0:
+                if SECTORS:
+                    # calculate the 30-minute averaged wind direction
+                    local_df['wind_direction_block_mean'] = local_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
+                        lambda row: wind_direction(row[U_VAR], row[V_VAR]), axis=1
                     )
-                )
-                # Wrangle the results from the groupby-apply
-                new_values_df = pd.DataFrame()
-                for key, results in result:
-                    new_values_df = pd.concat([
-                        new_values_df,
-                        pd.DataFrame({
-                            'time': key,
-                            'u':    results[0],
-                            'v':    results[1],
-                            'w':    results[2],
-                        }).set_index('time')
-                    ])
-                new_values_df = new_values_df.sort_index()
-            else: 
-                new_u, new_v, new_w = extrautils.apply_planar_fit(
-                    local_df[U_VAR], 
-                    local_df[V_VAR], 
-                    local_df[W_VAR], 
-                    fits_df.loc[MONTH, height, tower]['a'], 
-                    fits_df.loc[MONTH, height, tower]['W_f'], 
-                )
-                new_values_df = pd.DataFrame({
-                    'time': local_df.index,
-                    'u':    new_u,
-                    'v':    new_v,
-                    'w':    new_w,
-                }).set_index('time')
+                    # group the wind directions into discrete bins, we use the lower bound to identify each bin
+                    local_df['wind_direction_block_mean_bin_low'] = pd.cut(
+                        local_df['wind_direction_block_mean'],
+                        wind_dir_bins,
+                        labels = wind_dir_bins[:-1] 
+                    )
+                    # merge the planar fit parameters into the data, so each row gets the appropriate parameters
+                    # WE drop nans here because if U/V/W are nan, then wind_direction_block_mean and wind_direction_block_mean_bin_low
+                    # are nan, and then we try to merge using nan as a key, which fails
+                    local_df = local_df.dropna()
 
-            # add the fitted <u,v,w> values to the original xarray dataset
-            ds[f'u_{height}m_{tower}_fit'] =    new_values_df['u'].to_xarray()
-            ds[f'v_{height}m_{tower}_fit'] =    new_values_df['v'].to_xarray()
-            ds[f'w_{height}m_{tower}_fit'] =    new_values_df['w'].to_xarray()
+                    if len(local_df) > 0:
+                        local_df = local_df.reset_index().merge(
+                            fits_df.loc[MONTH, height, tower][['a', 'W_f']],
+                            left_on = 'wind_direction_block_mean_bin_low',
+                            right_on = 'bin_low'
+                        ).set_index('time')
+                        # group by the wind speed bin and apply the planar fit for each subset of data
+                        result = local_df.groupby('wind_direction_block_mean_bin_low').apply(
+                            lambda df: (
+                                df.index, 
+                                extrautils.apply_planar_fit(df[U_VAR], df[V_VAR], df[W_VAR], df['a'].values[0], df['W_f'].values[0])
+                            )
+                        )
+                        # Wrangle the results from the groupby-apply
+                        new_values_df = pd.DataFrame()
+                        for key, results in result:
+                            new_values_df = pd.concat([
+                                new_values_df,
+                                pd.DataFrame({
+                                    'time': key,
+                                    'u':    results[0],
+                                    'v':    results[1],
+                                    'w':    results[2],
+                                }).set_index('time')
+                            ])
+                        new_values_df = new_values_df.sort_index()
+                else: 
+                    new_u, new_v, new_w = extrautils.apply_planar_fit(
+                        local_df[U_VAR], 
+                        local_df[V_VAR], 
+                        local_df[W_VAR], 
+                        fits_df.loc[MONTH, height, tower]['a'], 
+                        fits_df.loc[MONTH, height, tower]['W_f'], 
+                    )
+                    new_values_df = pd.DataFrame({
+                        'time': local_df.index,
+                        'u':    new_u,
+                        'v':    new_v,
+                        'w':    new_w,
+                    }).set_index('time')
 
-            # Calculate un-fitted Reynolds averaged variables
-            ds_plain_w_h2o =create_re_avg_ds(ds, f'w_{height}m_{tower}', f'h2o_{height}m_{tower}',  f'w_h2o__{height}m_{tower}')[[
-                f'u_{height}m_{tower}',
-                f'v_{height}m_{tower}',
-                f'w_{height}m_{tower}',
-                f'w_h2o__{height}m_{tower}'
-            ]]
-            ds_plain_u_h2o =create_re_avg_ds(ds, f'u_{height}m_{tower}', f'h2o_{height}m_{tower}', f'u_h2o__{height}m_{tower}' )[f'u_h2o__{height}m_{tower}']
-            ds_plain_v_h2o =create_re_avg_ds(ds, f'v_{height}m_{tower}', f'h2o_{height}m_{tower}', f'v_h2o__{height}m_{tower}' )[f'v_h2o__{height}m_{tower}']
-            ds_plain_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}', f'w_{height}m_{tower}',   f'w_w__{height}m_{tower}'   )[f'w_w__{height}m_{tower}']
-            ds_plain_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'u_{height}m_{tower}',   f'u_u__{height}m_{tower}'   )[f'u_u__{height}m_{tower}']
-            ds_plain_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'v_{height}m_{tower}',   f'v_v__{height}m_{tower}'   )[f'v_v__{height}m_{tower}']
-            ds_plain_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'w_{height}m_{tower}',   f'u_w__{height}m_{tower}'   )[f'u_w__{height}m_{tower}']
-            ds_plain_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'w_{height}m_{tower}',   f'v_w__{height}m_{tower}'   )[f'v_w__{height}m_{tower}']
-            ds_plain_u_tc = create_re_avg_ds(ds, f'u_{height}m_{tower}', f'tc_{height}m_{tower}',  f'u_tc__{height}m_{tower}'  )[f'u_tc__{height}m_{tower}']
-            ds_plain_v_tc = create_re_avg_ds(ds, f'v_{height}m_{tower}', f'tc_{height}m_{tower}',  f'v_tc__{height}m_{tower}'  )[f'v_tc__{height}m_{tower}']
-            ds_plain_w_tc = create_re_avg_ds(ds, f'w_{height}m_{tower}', f'tc_{height}m_{tower}',  f'w_tc__{height}m_{tower}'  )[f'w_tc__{height}m_{tower}']
+                # add the fitted <u,v,w> values to the original xarray dataset
+                ds[f'u_{height}m_{tower}_fit'] =    new_values_df['u'].to_xarray()
+                ds[f'v_{height}m_{tower}_fit'] =    new_values_df['v'].to_xarray()
+                ds[f'w_{height}m_{tower}_fit'] =    new_values_df['w'].to_xarray()
 
-            # Calculate fitted Reynolds averaged variables
-            ds_fit_w_h2o =create_re_avg_ds(ds,  f'w_{height}m_{tower}_fit', f'h2o_{height}m_{tower}', f'w_h2o__{height}m_{tower}_fit')[[
-                f'u_{height}m_{tower}_fit',
-                f'v_{height}m_{tower}_fit',
-                f'w_{height}m_{tower}_fit',
-                f'w_h2o__{height}m_{tower}_fit'
-            ]]
-            ds_fit_u_h2o =create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',   f'u_h2o__{height}m_{tower}_fit')[f'u_h2o__{height}m_{tower}_fit']
-            ds_fit_v_h2o =create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',   f'v_h2o__{height}m_{tower}_fit')[f'v_h2o__{height}m_{tower}_fit']
-            ds_fit_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'w_w__{height}m_{tower}_fit'  )[f'w_w__{height}m_{tower}_fit']
-            ds_fit_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'u_{height}m_{tower}_fit', f'u_u__{height}m_{tower}_fit'  )[f'u_u__{height}m_{tower}_fit']
-            ds_fit_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'v_{height}m_{tower}_fit', f'v_v__{height}m_{tower}_fit'  )[f'v_v__{height}m_{tower}_fit']
-            ds_fit_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'u_w__{height}m_{tower}_fit'  )[f'u_w__{height}m_{tower}_fit']
-            ds_fit_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'v_w__{height}m_{tower}_fit'  )[f'v_w__{height}m_{tower}_fit']
-            ds_fit_u_tc = create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'u_tc__{height}m_{tower}_fit' )[f'u_tc__{height}m_{tower}_fit']
-            ds_fit_v_tc = create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'v_tc__{height}m_{tower}_fit' )[f'v_tc__{height}m_{tower}_fit']
-            ds_fit_w_tc = create_re_avg_ds(ds, f'w_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'w_tc__{height}m_{tower}_fit' )[f'w_tc__{height}m_{tower}_fit']
+                # Calculate un-fitted Reynolds averaged variables
+                ds_plain_w_h2o =create_re_avg_ds(ds, f'w_{height}m_{tower}', f'h2o_{height}m_{tower}',  f'w_h2o__{height}m_{tower}')[[
+                    f'u_{height}m_{tower}',
+                    f'v_{height}m_{tower}',
+                    f'w_{height}m_{tower}',
+                    f'w_h2o__{height}m_{tower}'
+                ]]
+                ds_plain_u_h2o =create_re_avg_ds(ds, f'u_{height}m_{tower}', f'h2o_{height}m_{tower}', f'u_h2o__{height}m_{tower}' )[f'u_h2o__{height}m_{tower}']
+                ds_plain_v_h2o =create_re_avg_ds(ds, f'v_{height}m_{tower}', f'h2o_{height}m_{tower}', f'v_h2o__{height}m_{tower}' )[f'v_h2o__{height}m_{tower}']
+                ds_plain_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}', f'w_{height}m_{tower}',   f'w_w__{height}m_{tower}'   )[f'w_w__{height}m_{tower}']
+                ds_plain_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'u_{height}m_{tower}',   f'u_u__{height}m_{tower}'   )[f'u_u__{height}m_{tower}']
+                ds_plain_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'v_{height}m_{tower}',   f'v_v__{height}m_{tower}'   )[f'v_v__{height}m_{tower}']
+                ds_plain_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'w_{height}m_{tower}',   f'u_w__{height}m_{tower}'   )[f'u_w__{height}m_{tower}']
+                ds_plain_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'w_{height}m_{tower}',   f'v_w__{height}m_{tower}'   )[f'v_w__{height}m_{tower}']
+                ds_plain_u_tc = create_re_avg_ds(ds, f'u_{height}m_{tower}', f'tc_{height}m_{tower}',  f'u_tc__{height}m_{tower}'  )[f'u_tc__{height}m_{tower}']
+                ds_plain_v_tc = create_re_avg_ds(ds, f'v_{height}m_{tower}', f'tc_{height}m_{tower}',  f'v_tc__{height}m_{tower}'  )[f'v_tc__{height}m_{tower}']
+                ds_plain_w_tc = create_re_avg_ds(ds, f'w_{height}m_{tower}', f'tc_{height}m_{tower}',  f'w_tc__{height}m_{tower}'  )[f'w_tc__{height}m_{tower}']
 
-            df_plain = ds_plain_w_h2o.join(ds_plain_u_h2o).join(ds_plain_v_h2o).join(ds_plain_w_w).join(ds_plain_u_u).join(
-                ds_plain_v_v).join(ds_plain_u_w).join(ds_plain_v_w).join(ds_plain_u_tc).join(ds_plain_v_tc).join(ds_plain_w_tc)
+                # Calculate fitted Reynolds averaged variables
+                ds_fit_w_h2o =create_re_avg_ds(ds,  f'w_{height}m_{tower}_fit', f'h2o_{height}m_{tower}', f'w_h2o__{height}m_{tower}_fit')[[
+                    f'u_{height}m_{tower}_fit',
+                    f'v_{height}m_{tower}_fit',
+                    f'w_{height}m_{tower}_fit',
+                    f'w_h2o__{height}m_{tower}_fit'
+                ]]
+                ds_fit_u_h2o =create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',   f'u_h2o__{height}m_{tower}_fit')[f'u_h2o__{height}m_{tower}_fit']
+                ds_fit_v_h2o =create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'h2o_{height}m_{tower}',   f'v_h2o__{height}m_{tower}_fit')[f'v_h2o__{height}m_{tower}_fit']
+                ds_fit_w_w =  create_re_avg_ds(ds, f'w_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'w_w__{height}m_{tower}_fit'  )[f'w_w__{height}m_{tower}_fit']
+                ds_fit_u_u =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'u_{height}m_{tower}_fit', f'u_u__{height}m_{tower}_fit'  )[f'u_u__{height}m_{tower}_fit']
+                ds_fit_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'v_{height}m_{tower}_fit', f'v_v__{height}m_{tower}_fit'  )[f'v_v__{height}m_{tower}_fit']
+                ds_fit_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'u_w__{height}m_{tower}_fit'  )[f'u_w__{height}m_{tower}_fit']
+                ds_fit_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'v_w__{height}m_{tower}_fit'  )[f'v_w__{height}m_{tower}_fit']
+                ds_fit_u_tc = create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'u_tc__{height}m_{tower}_fit' )[f'u_tc__{height}m_{tower}_fit']
+                ds_fit_v_tc = create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'v_tc__{height}m_{tower}_fit' )[f'v_tc__{height}m_{tower}_fit']
+                ds_fit_w_tc = create_re_avg_ds(ds, f'w_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'w_tc__{height}m_{tower}_fit' )[f'w_tc__{height}m_{tower}_fit']
 
-            df_fit = ds_fit_w_h2o.join(ds_fit_u_h2o).join(ds_fit_v_h2o).join(ds_fit_w_w).join(ds_fit_u_u).join(
-                ds_fit_v_v).join(ds_fit_u_w).join(ds_fit_v_w).join(ds_fit_u_tc).join(ds_fit_v_tc).join(ds_fit_w_tc)
+                df_plain = ds_plain_w_h2o.join(ds_plain_u_h2o).join(ds_plain_v_h2o).join(ds_plain_w_w).join(ds_plain_u_u).join(
+                    ds_plain_v_v).join(ds_plain_u_w).join(ds_plain_v_w).join(ds_plain_u_tc).join(ds_plain_v_tc).join(ds_plain_w_tc)
 
-            merged_df = df_plain.join(df_fit)
-            df_list.append(merged_df)
+                df_fit = ds_fit_w_h2o.join(ds_fit_u_h2o).join(ds_fit_v_h2o).join(ds_fit_w_w).join(ds_fit_u_u).join(
+                    ds_fit_v_v).join(ds_fit_u_w).join(ds_fit_v_w).join(ds_fit_u_tc).join(ds_fit_v_tc).join(ds_fit_w_tc)
+
+                merged_df = df_plain.join(df_fit)
+                df_list.append(merged_df)
 
     combined_df = df_list[0].join(df_list[1:])
     combined_df.to_parquet(output_file)
@@ -312,13 +315,25 @@ def process_hourly_file(input_file, output_file):
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Run application
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+def output_file_from_input_file(input_file):
+    return os.path.join(OUTPUT_PATH, input_file.split('/')[-1][27:]) + '.parquet'
 if __name__ == '__main__':
     n_files = len(file_list)
     print(f"n files: {n_files}")
 
+    output_files = [output_file_from_input_file(f) for f in file_list]
+    file_list = [
+        inf for inf, outf in zip(file_list, output_files) 
+        if not os.path.exists(outf)
+    ]
+    n_files = len(file_list)
+    print(f"processing subset of files: {n_files}")
+    
+
     def print_and_process(i):
         input_file = file_list[i]
-        output_file = os.path.join(OUTPUT_PATH, input_file.split('/')[-1][27:]) + '.parquet'
+        output_file = output_file_from_input_file(input_file)
         try:
             process_hourly_file(input_file, output_file)
         except Exception as exc:
