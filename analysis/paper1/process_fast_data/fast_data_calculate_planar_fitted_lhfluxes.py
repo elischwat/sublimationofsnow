@@ -342,7 +342,7 @@ if __name__ == '__main__':
             traceback.print_exc()
             
     # slow
-    # saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_files)))]
+    saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_files)))]
         
     # fast
     with concurrent.futures.ProcessPoolExecutor(max_workers=PARALLELISM) as executor:
