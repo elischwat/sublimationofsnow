@@ -22,9 +22,9 @@ Initialize parameters, file inputs
 # base path for a number of different directories this script needs
 DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/double_rotated_30min_despiked_q3.5/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/double_rotated_30min_despiked_q7/"
 DESPIKE = True
-FILTERING_q = 3.5
+FILTERING_q = 7
 # n cores utilized by application
 PARALLELISM = 20
 # Reynolds averaging length, in units (1/20) seconds
