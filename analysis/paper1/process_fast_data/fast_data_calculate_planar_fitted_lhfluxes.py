@@ -34,7 +34,7 @@ SAMPLES_PER_AVERAGING_LENGTH = 30*60*20
 # # Open fast data
 file_list = sorted(glob.glob(f"{DATA_DIR}sublimationofsnow/sosqc_fast/*.nc"))
 file_list = [f for f in file_list if '202210' not in f]
-wind_dir_bins = np.arange(0, 390, 30)
+wind_dir_bins = np.arange(0, 396, 36)
     
 # Open planar fit data
 if SECTORS:
@@ -342,7 +342,7 @@ if __name__ == '__main__':
             traceback.print_exc()
             
     # slow
-    saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_files)))]
+    # saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_files)))]
         
     # fast
     with concurrent.futures.ProcessPoolExecutor(max_workers=PARALLELISM) as executor:

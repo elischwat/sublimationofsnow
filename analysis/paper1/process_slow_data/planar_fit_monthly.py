@@ -13,9 +13,9 @@ import altair as alt
 import datetime, calendar
 from sublimpy import utils
 
-sos_files_dir = '/Users/elischwat/Development/data/sublimationofsnow/sosqc/sos_qc_geo_tiltcor_v20240307/'
-OUTPUT_FILE = '/Users/elischwat/Development/data/sublimationofsnow/monthly_planar_fits_10sectors.csv'
-wind_dir_bins = np.arange(0, 390, 30)
+sos_files_dir = '/storage/elilouis/sublimationofsnow/sosqc/sos_isfs_qc_geo_tiltcor_5min_v20241227/'
+OUTPUT_FILE = '/storage/elilouis/sublimationofsnow/monthly_planar_fits_10sectors.csv'
+wind_dir_bins = np.arange(0, 396, 36)
 
 
 with open(OUTPUT_FILE, "w") as file:
@@ -70,7 +70,7 @@ with open(OUTPUT_FILE, "w") as file:
             try: 
                 ds = xr.open_dataset(os.path.join(
                     sos_files_dir,
-                    f"isfs_sos_qc_geo_tiltcor_5min_{date}.nc"
+                    f"isfs_sos_qc_geo_tiltcor_5min_v2_{date}.nc"
                 ))
                 # this ensures we don't access variables that aren't in this dataset, which would throw an error
                 ds_new = ds[set(ds.data_vars).intersection(VARIABLE_NAMES)]
