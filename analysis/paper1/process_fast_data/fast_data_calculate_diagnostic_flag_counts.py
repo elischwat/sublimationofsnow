@@ -1,4 +1,4 @@
-er# ---
+# ---
 # jupyter:
 #   jupytext:
 #     text_representation:
@@ -33,7 +33,8 @@ from sublimpy import extrautils
 import glob
 from joblib import Parallel, delayed
 
-PARALLELISM = 8
+PATH_TO_HOURLY_NC_FILES = "/storage/elilouis/sublimationofsnow/sosqc_fast/"
+PARALLELISM = 4
 # +
 base_vars = [
     'base_time'
@@ -97,7 +98,6 @@ ldiag_vars = [
 ]
 
 all_vars = base_vars + diagbits_vars + irga_vars + ldiag_vars
-path_to_hourly_nc_files = "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/"
 all_diag_vars = diagbits_vars + irga_vars + ldiag_vars
 
 def process_file(nc_file, output_file):
@@ -127,7 +127,7 @@ def process_file(nc_file, output_file):
     return output_file
 
 if __name__ == '__main__':
-    file_list = glob.glob(os.path.join(path_to_hourly_nc_files, "*.nc"))
+    file_list = glob.glob(os.path.join(PATH_TO_HOURLY_NC_FILES, "*.nc"))
     output_file_list = [
         f.replace('/sosqc_fast/', '/sosqc_fast_flagcounts/').replace(".nc", '.parquet')
         for f in file_list

@@ -8,17 +8,16 @@
     Examples running the script
     #######################################
     # Example 1, 0900-1700 local time ("daytime")
-    python analysis/paper1/calculate_mrd.py -s 16    -e 0   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/0900_1700" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
-    
+    python analysis/paper1/process_fast_data/fast_data_calculate_spectra_mrd.py -s 16    -e 0   -o "/storage/elilouis/sublimationofsnow/mrd/0900_1700" -i "/storage/elilouis/sublimationofsnow/sosqc_fast/" -p 16
 
     # Example 2, 1900-0500 ("nighttime")
-    python analysis/paper1/calculate_mrd.py -s 2   -e 12   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/1900_0500" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+    python analysis/paper1/process_fast_data/fast_data_calculate_spectra_mrd.py -s 2   -e 12   -o "/storage/elilouis/sublimationofsnow/mrd/1900_0500" -i "/storage/elilouis/sublimationofsnow/sosqc_fast/" -p 16
 
     # Example 1, 1200-1600 local time ("mid-day")
-    python analysis/paper1/calculate_mrd.py -s 19    -e 23   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/1200_1600" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+    python analysis/paper1/process_fast_data/fast_data_calculate_spectra_mrd.py -s 19    -e 23   -o "/storage/elilouis/sublimationofsnow/mrd/1200_1600" -i "/storage/elilouis/sublimationofsnow/sosqc_fast/" -p 16
 
     # Example 1, 0800-1200 local time ("morning")
-    python analysis/paper1/calculate_mrd.py -s 15    -e 19   -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/0800_1200" -i "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/" -p 8
+    python analysis/paper1/process_fast_data/fast_data_calculate_spectra_mrd.py -s 15    -e 19   -o "/storage/elilouis/sublimationofsnow/mrd/0800_1200" -i "/storage/elilouis/sublimationofsnow/sosqc_fast/" -p 16
     
     
 """
@@ -279,6 +278,10 @@ if __name__ == '__main__':
     start_i, end_i, output_dir = (args.start_hour, args.end_hour, args.output_path)
     print(f"N total fast files: {len(file_list)}")
     print(f"Beginning processing (parallelism = {args.parallelism})")
+    # SLOW
+    # processed_results = [process_date(date, file_list, start_i, end_i, output_dir) for date in dates_tqdm]
+
+    # FAST
     processed_results =  Parallel(n_jobs = args.parallelism)(
         delayed(process_date)(date, file_list, start_i, end_i, output_dir) for date in dates_tqdm
     )
