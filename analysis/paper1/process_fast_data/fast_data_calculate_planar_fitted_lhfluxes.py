@@ -254,13 +254,14 @@ def process_hourly_file(input_file, output_file):
                 if 'new_values_df' in locals():
                     if ROTATE_STREAMWISE:
                             # rotate u and v into streamwise direction
-                        new_values_df['theta'] = new_values_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
+                        theta = new_values_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
                             lambda row: np.arctan2(row['v'], row['u']), 
                             axis=1
                         )
-                        new_values_df['u'] = new_values_df['u']*np.cos(new_values_df['theta']) + new_values_df['v']*np.sin(new_values_df['theta'])
-                        new_values_df['v'] = -new_values_df['u']*np.sin(new_values_df['theta']) + new_values_df['v']*np.cos(new_values_df['theta'])
-                        
+                        u_streamwise = new_values_df['u']*np.cos(theta) + new_values_df['v']*np.sin(theta)
+                        v_streamwise = -new_values_df['u']*np.sin(theta) + new_values_df['v']*np.cos(theta)
+                        new_values_df['u'] = u_streamwise
+                        new_values_df['v'] = v_streamwise                        
 
                     # add the fitted <u,v,w> values to the original xarray dataset
                     ds[f'u_{height}m_{tower}_fit'] =    new_values_df['u'].to_xarray()
@@ -348,9 +349,9 @@ if __name__ == '__main__':
             traceback.print_exc()
             
     # slow
-    # saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_files)))]
+    saved_files_list = [print_and_process(i) for i in tqdm(list(range(0, n_files)))]
         
     # fast
-    with concurrent.futures.ProcessPoolExecutor(max_workers=PARALLELISM) as executor:
-        saved_files_list = list(tqdm(executor.map(print_and_process, range(0, n_files)), total=n_files))
+    # with concurrent.futures.ProcessPoolExecutor(max_workers=PARALLELISM) as executor:
+    #     saved_files_list = list(tqdm(executor.map(print_and_process, range(0, n_files)), total=n_files))
     print("Finished processing")
