@@ -22,7 +22,8 @@ Initialize parameters, file inputs
 # base path for a number of different directories this script needs
 DATA_DIR = "/storage/elilouis/"
 # path to directory where daily files are stored
-OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_10sector_processed_30min_despiked_q7/"
+OUTPUT_PATH = f"{DATA_DIR}sublimationofsnow/planar_fit_10sector_processed_30min_despiked_q7_streamwise/"
+ROTATE_STREAMWISE = True
 DESPIKE = True
 FILTERING_q = 7
 SECTORS = True
@@ -171,17 +172,10 @@ def process_hourly_file(input_file, output_file):
     # Iterate over all height-towers, calculating the corrected variables
     df_list = []
     for height, tower in [
-        (1,  'c'),  
-        (2,  'c'),  
-        (3,  'c'), 
-        (5,  'c'), 
-        (10, 'c'), (15, 'c'), (20, 'c'),
-        (1,  'uw'), 
-        (3,  'uw'), (10, 'uw'),
-        (1,  'ue'), 
-        (3,  'ue'), (10, 'ue'),
-        (1,  'd'),  
-        (3,  'd'),  (10, 'd')
+        (1,  'c'),  (2,  'c'),  (3,  'c'),  (5,  'c'), (10, 'c'), (15, 'c'), (20, 'c'),
+        (1,  'uw'), (3,  'uw'), (10, 'uw'),
+        (1,  'ue'), (3,  'ue'), (10, 'ue'),
+        (1,  'd'),  (3,  'd'),  (10, 'd')
     ]:  
         # assign convenience variables for the height-tower being operated on
         U_VAR, V_VAR, W_VAR = (f"u_{height}m_{tower}", f"v_{height}m_{tower}", f"w_{height}m_{tower}")
@@ -258,6 +252,16 @@ def process_hourly_file(input_file, output_file):
                     }).set_index('time')
                 
                 if 'new_values_df' in locals():
+                    if ROTATE_STREAMWISE:
+                            # rotate u and v into streamwise direction
+                        new_values_df['theta'] = new_values_df.groupby(pd.Grouper(freq='30min')).transform('mean').apply(
+                            lambda row: np.arctan2(row['v'], row['u']), 
+                            axis=1
+                        )
+                        new_values_df['u'] = new_values_df['u']*np.cos(new_values_df['theta']) + new_values_df['v']*np.sin(new_values_df['theta'])
+                        new_values_df['v'] = -new_values_df['u']*np.sin(new_values_df['theta']) + new_values_df['v']*np.cos(new_values_df['theta'])
+                        
+
                     # add the fitted <u,v,w> values to the original xarray dataset
                     ds[f'u_{height}m_{tower}_fit'] =    new_values_df['u'].to_xarray()
                     ds[f'v_{height}m_{tower}_fit'] =    new_values_df['v'].to_xarray()
@@ -277,6 +281,7 @@ def process_hourly_file(input_file, output_file):
                     ds_plain_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'v_{height}m_{tower}',   f'v_v__{height}m_{tower}'   )[f'v_v__{height}m_{tower}']
                     ds_plain_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'w_{height}m_{tower}',   f'u_w__{height}m_{tower}'   )[f'u_w__{height}m_{tower}']
                     ds_plain_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}', f'w_{height}m_{tower}',   f'v_w__{height}m_{tower}'   )[f'v_w__{height}m_{tower}']
+                    ds_plain_u_v =  create_re_avg_ds(ds, f'u_{height}m_{tower}', f'v_{height}m_{tower}',   f'u_v__{height}m_{tower}'   )[f'u_v__{height}m_{tower}']
                     ds_plain_u_tc = create_re_avg_ds(ds, f'u_{height}m_{tower}', f'tc_{height}m_{tower}',  f'u_tc__{height}m_{tower}'  )[f'u_tc__{height}m_{tower}']
                     ds_plain_v_tc = create_re_avg_ds(ds, f'v_{height}m_{tower}', f'tc_{height}m_{tower}',  f'v_tc__{height}m_{tower}'  )[f'v_tc__{height}m_{tower}']
                     ds_plain_w_tc = create_re_avg_ds(ds, f'w_{height}m_{tower}', f'tc_{height}m_{tower}',  f'w_tc__{height}m_{tower}'  )[f'w_tc__{height}m_{tower}']
@@ -295,15 +300,16 @@ def process_hourly_file(input_file, output_file):
                     ds_fit_v_v =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'v_{height}m_{tower}_fit', f'v_v__{height}m_{tower}_fit'  )[f'v_v__{height}m_{tower}_fit']
                     ds_fit_u_w =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'u_w__{height}m_{tower}_fit'  )[f'u_w__{height}m_{tower}_fit']
                     ds_fit_v_w =  create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'w_{height}m_{tower}_fit', f'v_w__{height}m_{tower}_fit'  )[f'v_w__{height}m_{tower}_fit']
+                    ds_fit_u_v =  create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'v_{height}m_{tower}_fit', f'u_v__{height}m_{tower}_fit'  )[f'u_v__{height}m_{tower}_fit']
                     ds_fit_u_tc = create_re_avg_ds(ds, f'u_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'u_tc__{height}m_{tower}_fit' )[f'u_tc__{height}m_{tower}_fit']
                     ds_fit_v_tc = create_re_avg_ds(ds, f'v_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'v_tc__{height}m_{tower}_fit' )[f'v_tc__{height}m_{tower}_fit']
                     ds_fit_w_tc = create_re_avg_ds(ds, f'w_{height}m_{tower}_fit', f'tc_{height}m_{tower}',    f'w_tc__{height}m_{tower}_fit' )[f'w_tc__{height}m_{tower}_fit']
 
                     df_plain = ds_plain_w_h2o.join(ds_plain_u_h2o).join(ds_plain_v_h2o).join(ds_plain_w_w).join(ds_plain_u_u).join(
-                        ds_plain_v_v).join(ds_plain_u_w).join(ds_plain_v_w).join(ds_plain_u_tc).join(ds_plain_v_tc).join(ds_plain_w_tc)
+                        ds_plain_v_v).join(ds_plain_u_w).join(ds_plain_v_w).join(ds_plain_u_v).join(ds_plain_u_tc).join(ds_plain_v_tc).join(ds_plain_w_tc)
 
                     df_fit = ds_fit_w_h2o.join(ds_fit_u_h2o).join(ds_fit_v_h2o).join(ds_fit_w_w).join(ds_fit_u_u).join(
-                        ds_fit_v_v).join(ds_fit_u_w).join(ds_fit_v_w).join(ds_fit_u_tc).join(ds_fit_v_tc).join(ds_fit_w_tc)
+                        ds_fit_v_v).join(ds_fit_u_w).join(ds_fit_v_w).join(ds_fit_u_v).join(ds_fit_u_tc).join(ds_fit_v_tc).join(ds_fit_w_tc)
 
                     merged_df = df_plain.join(df_fit)
                     df_list.append(merged_df)
