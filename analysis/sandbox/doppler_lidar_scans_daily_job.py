@@ -30,10 +30,10 @@ def create_dl_plots(output_path, date):
     ).strftime(DATE_FORMAT)
 
     with TemporaryDirectory() as temp_dir:
-        act.discovery.download_data(USERNAME, TOKEN, SAIL_DATA_STREAM, startdate, enddate, output=temp_dir)
+        act.discovery.download_arm_data(USERNAME, TOKEN, SAIL_DATA_STREAM, startdate, enddate, output=temp_dir)
         dl_rhi_files = glob.glob(''.join([temp_dir, '/', SAIL_DATA_STREAM,'*cdf']))
         print(len(dl_rhi_files))
-        dl_rhi = act.io.armfiles.read_netcdf(dl_rhi_files)
+        dl_rhi = act.io.read_arm_netcdf(dl_rhi_files)
         src_rhi = dl_rhi.to_dataframe().reset_index()
     
     src_rhi['time'] = src_rhi['time'].dt.tz_localize('UTC').dt.tz_convert('US/Mountain')
@@ -53,7 +53,7 @@ def create_dl_plots(output_path, date):
     src_rhi['z'] = src_rhi['range']*np.sin(np.deg2rad(src_rhi['elevation']))
 
     src_rhi['time_beginning_of_hour'] = src_rhi['time'].apply(lambda dt: dt.replace(minute=0, second=0, microsecond=0))
-
+    sosutils.get_radar_scan_ground_profile_from_raster
     # Get ground profile
     upvalley_elev_profile_df = sosutils.get_radar_scan_ground_profile(
         lon =     dl_rhi['lon'].values[0],
@@ -95,7 +95,7 @@ def create_dl_plots(output_path, date):
     for i_day, day_and_hour in enumerate(sorted(src['time_beginning_of_hour'].unique())):
         local_src = src[src['time_beginning_of_hour'] == day_and_hour]
         ax = axes.flatten()[i_day]
-        hexplot = ax.hexbin(local_src['x'], local_src['z'], C=local_src['radial_velocity'], cmap='RdYlBu', clim=(-10, 10))
+        hexplot = ax.hexbin(local_src['x'], local_src['z'], C=local_src['radial_velocity'], cmap='gist_ncar', clim=(-20, 20))
         ax.title.set_text(pd.to_datetime(day_and_hour))
         ax.title.set_fontsize(8)
         ax.fill_between(

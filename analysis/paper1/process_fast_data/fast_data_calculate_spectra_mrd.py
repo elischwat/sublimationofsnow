@@ -16,6 +16,9 @@
     # Example 1, 1200-1600 local time ("mid-day")
     python analysis/paper1/process_fast_data/fast_data_calculate_spectra_mrd.py -s 19    -e 23   -o "/storage/elilouis/sublimationofsnow/mrd/1200_1600" -i "/storage/elilouis/sublimationofsnow/sosqc_fast/" -p 16
 
+    # Example 1, 1500-1800 local time ("afternoon")
+    python analysis/paper1/process_fast_data/fast_data_calculate_spectra_mrd.py -s 22    -e 1   -o "/storage/elilouis/sublimationofsnow/mrd/1500_1800" -i "/storage/elilouis/sublimationofsnow/sosqc_fast/" -p 16
+
     # Example 1, 0800-1200 local time ("morning")
     python analysis/paper1/process_fast_data/fast_data_calculate_spectra_mrd.py -s 15    -e 19   -o "/storage/elilouis/sublimationofsnow/mrd/0800_1200" -i "/storage/elilouis/sublimationofsnow/sosqc_fast/" -p 16
     
@@ -227,9 +230,6 @@ def process_date(date, file_list, start_i, end_i, output_dir):
         sensheat_copower_spectrum_fn,
         latheat_copower_spectrum_fn
     )
-
-
-
 
 if __name__ == '__main__':
 

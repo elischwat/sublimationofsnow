@@ -234,7 +234,7 @@ def get_radar_scan_ground_profile(lon, lat, bearing, radius, spacing = 10):
     radar_location = geopy.Point(lat, lon)
     radar_elevation = py3dep.elevation_bycoords(
         [(radar_location.longitude, radar_location.latitude)]
-    )[0]
+    )
     line = get_linestring(lon, lat, bearing, radius)
 
     elevation_profile = py3dep.elevation_profile(line, spacing=spacing, crs='EPSG:4326')
