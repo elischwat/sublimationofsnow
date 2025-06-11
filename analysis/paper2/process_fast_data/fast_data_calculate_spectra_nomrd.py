@@ -42,6 +42,16 @@
         -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/NOmrds/" \
         -s 1000 \
         -p 16
+
+
+    python analysis/paper2/process_fast_data/fast_data_calculate_spectra_nomrd.py \
+        -f \
+            '/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_20230304_21.nc' \
+            '/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_20230304_22.nc' \
+            '/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_20230304_23.nc' \
+        -o "/Users/elischwat/Development/data/sublimationofsnow/mrd/NOmrds/" \
+        -s 1000 \
+        -p 16
 """
 import numpy as np
 import xarray as xr
