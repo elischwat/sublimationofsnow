@@ -124,8 +124,7 @@ def fast_data_files_to_dataframe(file_list, rotation = 'double'):
         ),
         axis = 1
     )
-    fast_df = utils.modify_df_timezone(fast_df, pytz.UTC, "US/Mountain")
-
+    
     # Interpolate all the variables 
     fast_df = fast_df.set_index('time')[value_vars].interpolate().reset_index()
 
