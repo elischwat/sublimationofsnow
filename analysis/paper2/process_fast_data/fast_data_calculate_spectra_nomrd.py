@@ -76,6 +76,7 @@ def apply_first_rotation(df, u_var, v_var, w_var):
     mean_u = df[u_var].mean()
     mean_v = df[v_var].mean()
     theta = np.arctan2(mean_v, mean_u)
+    print(np.rad2deg(theta))
     adj_u = df[u_var]*np.cos(theta) + df[v_var]*np.sin(theta)
     adj_v = -df[u_var]*np.sin(theta) + df[v_var]*np.cos(theta)
     df[u_var] = adj_u
