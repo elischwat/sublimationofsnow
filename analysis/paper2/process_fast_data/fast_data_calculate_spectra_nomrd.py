@@ -166,8 +166,9 @@ def newmrd(data_a, data_b, M, Mx):
             Dstd[ms] = np.std(wmeans_a * wmeans_b, ddof=0)
     return D, Dstd
 
-def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism):
-    M = int(np.floor(np.log2(len(df))))
+def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism, M=None):
+    if M is None:
+        M = int(np.floor(np.log2(len(df))))
     print(f"Got data of length {len(df)}. using M = {M}")
     timestep = (
         df['time'].iloc[1] - df['time'].iloc[0]
@@ -290,7 +291,7 @@ if __name__ == '__main__':
     ####################################
 
     # Define the start and end dates
-    start_date = datetime(2023, 3, 1)
+    start_date = datetime(2023, 4, 23)
     end_date = datetime(2023, 5, 1)
 
     # Generate the list of date strings
@@ -302,12 +303,19 @@ if __name__ == '__main__':
     for date in date_list:
         print(f"Processing date: {date}")
 
-        input_file_list = [
-            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_{date}_21.nc'
-            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_{date}_22.nc'
-            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_{date}_23.nc'
-        ]
         shift = 2000
         parallelism = 20
         output_path = "/storage/elilouis/sublimationofsnow/mrd/NOmrds/"
+
+        input_file_list = [
+            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_v2_{date}_21.nc',
+            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_v2_{date}_22.nc',
+            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_v2_{date}_23.nc',
+        ]
+        process_args(input_file_list, shift, parallelism, output_path)
+        input_file_list = [
+            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_v2_{date}_15.nc',
+            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_v2_{date}_16.nc',
+            f'/storage/elilouis/sublimationofsnow/sosqc_fast/isfs_sos_qc_geo_tiltcor_hr_v2_{date}_17.nc',
+        ]
         process_args(input_file_list, shift, parallelism, output_path)
