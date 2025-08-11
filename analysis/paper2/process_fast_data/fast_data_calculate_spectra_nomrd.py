@@ -110,6 +110,13 @@ def fast_data_files_to_dataframe(file_list, rotation = 'double'):
         'u_10m_ue',	'v_10m_ue',	'w_10m_ue',	'h2o_10m_ue',   'tc_10m_ue',
         'u_3m_d',	'v_3m_d',	'w_3m_d',	'h2o_3m_d',     'tc_3m_d',
         'u_10m_d',	'v_10m_d',	'w_10m_d',	'h2o_10m_d',    'tc_10m_d',
+        'Pirga_2m_c',
+        'Pirga_3m_c',
+        'Pirga_5m_c',
+        'Pirga_10m_c',
+        'Pirga_15m_c',
+        'Pirga_20m_c',
+        'P_10m_c'
     ]
     suffixes = [ '2m_c',  '3m_c',  '5m_c',  '10m_c',  '15m_c',  '20m_c',  '3m_uw',  '10m_uw',  '3m_ue',  '10m_ue',  '3m_d',  '10m_d']
     VARIABLES = index_vars + value_vars
@@ -169,7 +176,8 @@ def newmrd(data_a, data_b, M, Mx):
 def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism, M=None):
     if M is None:
         M = int(np.floor(np.log2(len(df))))
-    print(f"Got data of length {len(df)}. using M = {M}")
+    else:
+        print(f"Got data of length {len(df)}. using M = {M}")
     timestep = (
         df['time'].iloc[1] - df['time'].iloc[0]
     ).total_seconds() * 1000
