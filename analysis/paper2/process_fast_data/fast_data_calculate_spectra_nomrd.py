@@ -69,6 +69,7 @@ from tqdm import tqdm
 import os
 import math
 from datetime import datetime, timedelta
+from dask.distributed import Client
 
 # First and second rotations that comprise the double rotation,
 # as described here: http://link.springer.com/10.1023/A:1018966204465
@@ -119,8 +120,18 @@ def fast_data_files_to_dataframe(file_list, rotation = 'double'):
         'P_10m_c'
     ]
     suffixes = [ '2m_c',  '3m_c',  '5m_c',  '10m_c',  '15m_c',  '20m_c',  '3m_uw',  '10m_uw',  '3m_ue',  '10m_ue',  '3m_d',  '10m_d']
-    VARIABLES = index_vars + value_vars
-    fast_ds = xr.open_mfdataset( file_list, concat_dim="time",  combine="nested",  data_vars=VARIABLES)
+    VARIABLES = index_vars + value_vars                                     
+    #########################
+    # I think one should have a dask client instantiated, for the parallel=True argument to work well.
+    #########################
+    client = Client(n_workers=20, threads_per_worker=2, memory_limit='10GB')
+    fast_ds = xr.open_mfdataset(
+        file_list,
+        # concat_dim="time",
+        # combine="nested",
+        data_vars=VARIABLES,
+        parallel=True
+    )
     fast_df = fast_ds[VARIABLES].to_dataframe()
 
     ## Create timestamp
@@ -147,7 +158,7 @@ def fast_data_files_to_dataframe(file_list, rotation = 'double'):
                 # then rotation is single or double, and we at least need to do the first rotation
                 fast_df = apply_second_rotation(fast_df, f'u_{suffix}', f'v_{suffix}', f'w_{suffix}')
                 print("mean u, v, w after second rotation ", fast_df[[f'u_{suffix}', f'v_{suffix}', f'w_{suffix}']].mean())    
-    
+    client.close()
     return fast_df
 
 ##########
@@ -181,8 +192,8 @@ def double_rotation(df, u_col, v_col, w_col):
     theta = np.arctan2(mean_v, mean_u)
     adj_u = df[u_col]*np.cos(theta) + df[v_col]*np.sin(theta)
     adj_v = -df[u_col]*np.sin(theta) + df[v_col]*np.cos(theta)
-    df[u_col] = adj_u
-    df[v_col] = adj_v
+    df.loc[:, u_col] = adj_u
+    df.loc[:, v_col] = adj_v
 
     # SECOND ROTATION
     mean_u = df[u_col].mean()
@@ -190,12 +201,12 @@ def double_rotation(df, u_col, v_col, w_col):
     phi = np.arctan2(mean_w, mean_u)
     adj_u = df[u_col]*np.cos(phi) + df[w_col]*np.sin(phi)
     adj_w = - df[u_col]*np.sin(phi) + df[w_col]*np.cos(phi)
-    df[u_col] = adj_u
-    df[w_col] = adj_w
+    df.loc[:, u_col] = adj_u
+    df.loc[:, w_col] = adj_w
     return df
 
 
-def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism, M=None, double_rotate=True):
+def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism, M=None, double_rotate=False):
     if M is None:
         M = int(np.floor(np.log2(len(df))))
     else:
