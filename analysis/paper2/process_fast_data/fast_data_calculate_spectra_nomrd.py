@@ -173,7 +173,29 @@ def newmrd(data_a, data_b, M, Mx):
             Dstd[ms] = np.std(wmeans_a * wmeans_b, ddof=0)
     return D, Dstd
 
-def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism, M=None):
+        ### DEFINE FUNCTION FOR DOUBLE ROTATION
+def double_rotation(df, u_col, v_col, w_col):
+    # FIRST ROTATION
+    mean_u = df[u_col].mean()
+    mean_v = df[v_col].mean()
+    theta = np.arctan2(mean_v, mean_u)
+    adj_u = df[u_col]*np.cos(theta) + df[v_col]*np.sin(theta)
+    adj_v = -df[u_col]*np.sin(theta) + df[v_col]*np.cos(theta)
+    df[u_col] = adj_u
+    df[v_col] = adj_v
+
+    # SECOND ROTATION
+    mean_u = df[u_col].mean()
+    mean_w = df[w_col].mean()
+    phi = np.arctan2(mean_w, mean_u)
+    adj_u = df[u_col]*np.cos(phi) + df[w_col]*np.sin(phi)
+    adj_w = - df[u_col]*np.sin(phi) + df[w_col]*np.cos(phi)
+    df[u_col] = adj_u
+    df[w_col] = adj_w
+    return df
+
+
+def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism, M=None, double_rotate=True):
     if M is None:
         M = int(np.floor(np.log2(len(df))))
     else:
@@ -191,6 +213,8 @@ def calculate_mrd_for_df(df, VAR1, VAR2, shift, parallelism, M=None):
         i_start = i * shift
         i_end = i * shift + 2**M - 1
         this_df = df.loc[ i_start : i_end]
+        if double_rotate:
+            this_df = double_rotation(this_df, 'u', 'v', 'w')
         result = newmrd(
             this_df[VAR1],
             this_df[VAR2],
