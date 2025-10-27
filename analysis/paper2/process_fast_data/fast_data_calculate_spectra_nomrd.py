@@ -124,13 +124,14 @@ def fast_data_files_to_dataframe(file_list, rotation = 'double'):
     #########################
     # I think one should have a dask client instantiated, for the parallel=True argument to work well.
     #########################
-    client = Client(n_workers=20, threads_per_worker=2, memory_limit='10GB')
+    # client = Client(n_workers=20, threads_per_worker=2, memory_limit='10GB')
+
     fast_ds = xr.open_mfdataset(
         file_list,
-        # concat_dim="time",
-        # combine="nested",
+        concat_dim="time",
+        combine="nested",
         data_vars=VARIABLES,
-        parallel=True
+        # parallel=True
     )
     fast_df = fast_ds[VARIABLES].to_dataframe()
 
@@ -158,7 +159,7 @@ def fast_data_files_to_dataframe(file_list, rotation = 'double'):
                 # then rotation is single or double, and we at least need to do the first rotation
                 fast_df = apply_second_rotation(fast_df, f'u_{suffix}', f'v_{suffix}', f'w_{suffix}')
                 print("mean u, v, w after second rotation ", fast_df[[f'u_{suffix}', f'v_{suffix}', f'w_{suffix}']].mean())    
-    client.close()
+    # client.close()
     return fast_df
 
 ##########
