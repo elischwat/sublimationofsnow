@@ -11,7 +11,7 @@ import time
 ### INPUTS
 # DATA_DIR = "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/"
 DATA_DIR = "/storage/elilouis/sublimationofsnow/sosqc_fast"
-OUTPUT_DIR = "./mrds"
+OUTPUT_DIR = "./mrds_2minshift/"
 START_DATE = '20221130'
 END_DATE = '20230615'
 # START_DATE = '20230418'
@@ -66,11 +66,11 @@ def do_the_work():
             )
             print(f'......Elapsed time: {time.time() - start_time} seconds')
             print(f'...running mrds')
-            
+                
             mrd_uw_sos = calculate_mrd_for_df(
                 fast_df_sos[['u', 'v', 'w']].reset_index(), 
                 'u', 'w',
-                shift=6000, # 10 minute sliding window
+                shift=1200, # 2 minute sliding window
                 parallelism=22, 
                 M=14, # 27.31 minute long calculations,
                 double_rotate=True
@@ -78,7 +78,7 @@ def do_the_work():
             mrd_vw_sos = calculate_mrd_for_df(
                 fast_df_sos[['u', 'v', 'w']].reset_index(), 
                 'v', 'w',
-                shift=6000, # 10 minute sliding window
+                shift=1200, # 2 minute sliding window
                 parallelism=22, 
                 M=14, # 27.31 minute long calculations,
                 double_rotate=True
@@ -86,7 +86,7 @@ def do_the_work():
             mrd_uv_sos = calculate_mrd_for_df(
                 fast_df_sos[['u', 'v', 'w']].reset_index(), 
                 'u', 'v',
-                shift=6000, # 10 minute sliding window
+                shift=1200, # 2 minute sliding window
                 parallelism=22, 
                 M=14, # 27.31 minute long calculations,
                 double_rotate=True
