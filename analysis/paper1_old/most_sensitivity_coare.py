@@ -32,12 +32,15 @@ PARALLELISM = 4
 
 # Inputs
 start_date = '20221130'
-end_date = '20230509'
+end_date = '20230619'
 
 # # Open Data
-tidy_df = pd.read_parquet(f"tidy_df_{start_date}_{end_date}_noplanar_fit_clean.parquet")
+tidy_df = pd.read_parquet(
+    "../paper1/process_slow_data/tidy_df_20221101_20230619_planar_fit_multiplane_q7_flags9000_pf10.parquet"
+)
 tidy_df['time'] = pd.to_datetime(tidy_df['time'])
-[v for v in tidy_df.variable.unique() if 'z0' in v]
+tidy_df = tidy_df[tidy_df.time >= start_date]
+tidy_df = tidy_df[tidy_df.time <= end_date]
 
 # returns in Pascals
 def e_sat_metpy(temp_in_c):
@@ -54,12 +57,13 @@ z0_variable_names = [
     # 'z0_windprofile_weekly',
 ]
 z0_values_constant = [
-    0.00001,
-    0.00005,    
-    0.0001, 
-    0.0005, 
-    0.001,  
-    0.005,  
+    # 0.00001,
+    # 0.00005,    
+    # 0.0001, 
+    0.0002, 
+    # 0.0005, 
+    # 0.001,  
+    # 0.005,  
 ]
 
 # EXTRACT VARIABLES
@@ -67,8 +71,8 @@ VARIABLES = [
     ## Input Variables for Turbpy
     'Tsurf_c',
     'Tsurf_d',
-    # 'Tsurf_uw',
-    # 'Tsurf_ue',
+    'Tsurf_uw',
+    'Tsurf_ue',
     'Tsurf_rad_d',
     'Tsnow_1_0m_d',
     'Tsnow_0_4m_d',
@@ -164,25 +168,26 @@ def run_coare(inputs):
     return results_df
 
 if __name__ == '__main__':
-    SNOW_SURFACE_ROUGHNESS_VALUES = z0_variable_names + z0_values_constant
+    # SNOW_SURFACE_ROUGHNESS_VALUES = z0_variable_names + z0_values_constant
+    SNOW_SURFACE_ROUGHNESS_VALUES = z0_values_constant
 
     surface_temp_options = [
         'Tsurf_c',
         'Tsurf_d',
-        # 'Tsurf_uw',
-        # 'Tsurf_ue',
-        'Tsurf_rad_d',
+        'Tsurf_uw',
+        'Tsurf_ue',
+        # 'Tsurf_rad_d',
         # Including these two for an analysis, see flux_divergence.ipynb
-        'Tsnow_1_0m_d',
-        'Tsnow_0_4m_d',
+        # 'Tsnow_1_0m_d',
+        # 'Tsnow_0_4m_d',
     ]
 
     meas_heights = [
         3,
-        5,
-        10,
-        15,
-        20
+        # 5,
+        # 10,
+        # 15,
+        # 20
     ]
 
     e_sat_curve_options = {
@@ -207,4 +212,4 @@ if __name__ == '__main__':
     
     combined_results = pd.concat(processed_results)
     
-    combined_results.to_parquet("coare_model_results.parquet")
+    combined_results.to_parquet("coare_model_results_extra.parquet")
