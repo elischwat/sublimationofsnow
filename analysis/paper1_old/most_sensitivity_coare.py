@@ -36,7 +36,8 @@ end_date = '20230619'
 
 # # Open Data
 tidy_df = pd.read_parquet(
-    "../paper1/process_slow_data/tidy_df_20221101_20230619_planar_fit_multiplane_q7_flags9000_pf10.parquet"
+    # "../paper1/process_slow_data/tidy_df_20221101_20230619_planar_fit_multiplane_q7_flags9000_pf10.parquet"
+    "../paper3/lidar_data/sos_dataset_with_tsurf_filled.parquet"
 )
 tidy_df['time'] = pd.to_datetime(tidy_df['time'])
 tidy_df = tidy_df[tidy_df.time >= start_date]
@@ -64,6 +65,7 @@ z0_values_constant = [
     # 0.0005, 
     # 0.001,  
     # 0.005,  
+    0.0079,
 ]
 
 # EXTRACT VARIABLES
