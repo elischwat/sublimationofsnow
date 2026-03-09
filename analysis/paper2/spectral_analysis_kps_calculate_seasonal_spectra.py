@@ -9,8 +9,8 @@ from dask.distributed import Client
 import time
 
 ### INPUTS
-# DATA_DIR = "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/"
-DATA_DIR = "/storage/elilouis/sublimationofsnow/sosqc_fast"
+DATA_DIR = "/Users/elischwat/Development/data/sublimationofsnow/sosqc_fast/"
+# DATA_DIR = "/storage/elilouis/sublimationofsnow/sosqc_fast"
 OUTPUT_DIR = "./mrds_2minshift/"
 START_DATE = '20221130'
 END_DATE = '20230615'
@@ -46,10 +46,11 @@ def do_the_work():
             )
             fast_df_sos_all_data = utils.modify_df_timezone(fast_df_sos_all_data, 'UTC', 'US/Mountain')
             fast_df_sos_all_data = fast_df_sos_all_data.set_index('time').loc[d1.strftime('%Y%m%d')]
-            fast_df_sos = fast_df_sos_all_data[['u_3m_c', 'v_3m_c', 'w_3m_c']].rename(columns={
+            fast_df_sos = fast_df_sos_all_data[['u_3m_c', 'v_3m_c', 'w_3m_c', 'h2o_3m_c']].rename(columns={
                 'u_3m_c': 'u',
                 'v_3m_c': 'v',
                 'w_3m_c': 'w',
+                'h2o_3m_c': 'h2o',
             })
             print(f'......Elapsed time: {time.time() - start_time} seconds')
             print(f'...resampling')
@@ -63,29 +64,39 @@ def do_the_work():
                 u = fast_df_sos['u'].interpolate(),
                 v = fast_df_sos['v'].interpolate(),
                 w = fast_df_sos['w'].interpolate(),
+                h2o = fast_df_sos['h2o'].interpolate(),
             )
             print(f'......Elapsed time: {time.time() - start_time} seconds')
             print(f'...running mrds')
                 
-            mrd_uw_sos = calculate_mrd_for_df(
-                fast_df_sos[['u', 'v', 'w']].reset_index(), 
-                'u', 'w',
-                shift=1200, # 2 minute sliding window
-                parallelism=22, 
-                M=14, # 27.31 minute long calculations,
-                double_rotate=True
-            )
-            mrd_vw_sos = calculate_mrd_for_df(
-                fast_df_sos[['u', 'v', 'w']].reset_index(), 
-                'v', 'w',
-                shift=1200, # 2 minute sliding window
-                parallelism=22, 
-                M=14, # 27.31 minute long calculations,
-                double_rotate=True
-            )
-            mrd_uv_sos = calculate_mrd_for_df(
-                fast_df_sos[['u', 'v', 'w']].reset_index(), 
-                'u', 'v',
+            # mrd_uw_sos = calculate_mrd_for_df(
+            #     fast_df_sos[['u', 'v', 'w']].reset_index(), 
+            #     'u', 'w',
+            #     shift=1200, # 2 minute sliding window
+            #     parallelism=22, 
+            #     M=14, # 27.31 minute long calculations,
+            #     double_rotate=True
+            # )
+            # mrd_vw_sos = calculate_mrd_for_df(
+            #     fast_df_sos[['u', 'v', 'w']].reset_index(), 
+            #     'v', 'w',
+            #     shift=1200, # 2 minute sliding window
+            #     parallelism=22, 
+            #     M=14, # 27.31 minute long calculations,
+            #     double_rotate=True
+            # )
+            # mrd_uv_sos = calculate_mrd_for_df(
+            #     fast_df_sos[['u', 'v', 'w']].reset_index(), 
+            #     'u', 'v',
+            #     shift=1200, # 2 minute sliding window
+            #     parallelism=22, 
+            #     M=14, # 27.31 minute long calculations,
+            #     double_rotate=True
+            # )
+
+            mrd_wh2o_sos = calculate_mrd_for_df(
+                fast_df_sos[['u', 'v', 'w', 'h2o']].reset_index(), 
+                'w', 'h2o',
                 shift=1200, # 2 minute sliding window
                 parallelism=22, 
                 M=14, # 27.31 minute long calculations,
@@ -95,9 +106,10 @@ def do_the_work():
             print(f'......Elapsed time: {time.time() - start_time} seconds')
             print(f'...saving file')
         
-            mrd_uw_sos.to_parquet(os.path.join(OUTPUT_DIR, 'uw', d1.strftime('%Y%m%d') + '.csv'))
-            mrd_vw_sos.to_parquet(os.path.join(OUTPUT_DIR, 'vw', d1.strftime('%Y%m%d') + '.csv'))
-            mrd_uv_sos.to_parquet(os.path.join(OUTPUT_DIR, 'uv', d1.strftime('%Y%m%d') + '.csv'))
+            # mrd_uw_sos.to_parquet(os.path.join(OUTPUT_DIR, 'uw', d1.strftime('%Y%m%d') + '.csv'))
+            # mrd_vw_sos.to_parquet(os.path.join(OUTPUT_DIR, 'vw', d1.strftime('%Y%m%d') + '.csv'))
+            # mrd_uv_sos.to_parquet(os.path.join(OUTPUT_DIR, 'uv', d1.strftime('%Y%m%d') + '.csv'))
+            mrd_wh2o_sos.to_parquet(os.path.join(OUTPUT_DIR, 'wh2o', d1.strftime('%Y%m%d') + '.csv'))
             print(f'......Elapsed time: {time.time() - start_time} seconds')
             print(f'...file saved, iteration finished')
         
